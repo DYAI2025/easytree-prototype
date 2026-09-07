@@ -242,17 +242,52 @@ describe("api-master-data: Mitarbeitende", () => {
     expect(body.dailyCostMinorUnits).toBe("32000");
   });
 
-  it("listet und haelt einen fehlenden Tagessatz als null", async () => {
+  it("liefert einen vorhandenen Tagessatz ueber GET als Dezimalstring", async () => {
+    // Ohne einen NICHT-NULL-Wert wird die bigint->string-Konvertierung an der
+    // HTTP-Grenze nie beobachtet: null passiert sie unveraendert.
+    await createEmployeeRoute(
+      post("http://localhost/api/mitarbeitende", {
+        displayName: "Anna Bergmann",
+        dailyCostMinorUnits: "32000",
+      }),
+    );
     await createEmployeeRoute(
       post("http://localhost/api/mitarbeitende", { displayName: "Erik Sommer" }),
     );
 
-    const body = await (
-      await listEmployeesRoute(new Request("http://localhost/api/mitarbeitende"))
-    ).json();
+    const response = await listEmployeesRoute(new Request("http://localhost/api/mitarbeitende"));
+    const body = await response.json();
 
-    expect(body.items).toHaveLength(1);
-    expect(body.items[0].dailyCostMinorUnits).toBeNull();
+    expect(response.status).toBe(200);
+    expect(body.items).toHaveLength(2);
+
+    const anna = body.items.find((i: { displayName: string }) => i.displayName === "Anna Bergmann");
+    const erik = body.items.find((i: { displayName: string }) => i.displayName === "Erik Sommer");
+
+    expect(typeof anna.dailyCostMinorUnits).toBe("string");
+    expect(anna.dailyCostMinorUnits).toBe("32000");
+    expect(erik.dailyCostMinorUnits).toBeNull();
+  });
+
+  it("roundtrippt einen Wert oberhalb von Number.MAX_SAFE_INTEGER exakt", async () => {
+    // 2^53 + 1: als number waere dieser Wert nicht mehr darstellbar.
+    const gross = "9007199254740993";
+
+    await createEmployeeRoute(
+      post("http://localhost/api/mitarbeitende", {
+        displayName: "Grossverdiener",
+        dailyCostMinorUnits: gross,
+      }),
+    );
+
+    const response = await listEmployeesRoute(new Request("http://localhost/api/mitarbeitende"));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.items[0].dailyCostMinorUnits).toBe(gross);
+    // Der Beweis fuer die Notwendigkeit des Strings: durch number gedreht
+    // veraendert sich der Wert (das Literal selbst waere schon ...992).
+    expect(String(Number(body.items[0].dailyCostMinorUnits))).not.toBe(gross);
   });
 
   it("aendert per PATCH", async () => {
@@ -310,17 +345,30 @@ describe("api-master-data: Ressourcen", () => {
     expect(body.dailyCostMinorUnits).toBe("45000");
   });
 
-  it("listet die angelegte Ressource", async () => {
+  it("liefert einen vorhandenen Tagessatz ueber GET als Dezimalstring", async () => {
+    await createResourceRoute(
+      post("http://localhost/api/ressourcen", {
+        kind: "machine",
+        name: "Hebebuehne HB-18",
+        dailyCostMinorUnits: "45000",
+      }),
+    );
     await createResourceRoute(
       post("http://localhost/api/ressourcen", { kind: "equipment", name: "Seilklettersatz B" }),
     );
 
-    const body = await (
-      await listResourcesRoute(new Request("http://localhost/api/ressourcen"))
-    ).json();
+    const response = await listResourcesRoute(new Request("http://localhost/api/ressourcen"));
+    const body = await response.json();
 
-    expect(body.items).toHaveLength(1);
-    expect(body.items[0].dailyCostMinorUnits).toBeNull();
+    expect(response.status).toBe(200);
+    expect(body.items).toHaveLength(2);
+
+    const buehne = body.items.find((i: { name: string }) => i.name === "Hebebuehne HB-18");
+    const satz = body.items.find((i: { name: string }) => i.name === "Seilklettersatz B");
+
+    expect(typeof buehne.dailyCostMinorUnits).toBe("string");
+    expect(buehne.dailyCostMinorUnits).toBe("45000");
+    expect(satz.dailyCostMinorUnits).toBeNull();
   });
 
   it("aendert per PATCH", async () => {
