@@ -1,4 +1,6 @@
-# unrs-resolver ist der native Resolver von eslint-import-resolver-typescript.
-# Ohne freigegebenes Build-Skript bleibt die Binary ungebaut.
+# Build-Skripte, die pnpm sonst uebergeht:
+# - unrs-resolver: nativer Resolver von eslint-import-resolver-typescript
+# - esbuild: native Binary fuer drizzle-kit und tsx
 onlyBuiltDependencies:
   - unrs-resolver
+  - esbuild
