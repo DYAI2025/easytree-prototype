@@ -1,3 +1,14 @@
+CREATE TABLE "audit_events" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"org_id" uuid NOT NULL,
+	"actor" text NOT NULL,
+	"operation" text NOT NULL,
+	"subject_id" uuid,
+	"payload" jsonb,
+	"correlation_id" text,
+	"occurred_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE "customers" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"org_id" uuid NOT NULL,
@@ -61,6 +72,19 @@ CREATE TABLE "engagements" (
 	CONSTRAINT "engagements_horizon_required_when_open" CHECK ("engagements"."end_date" is not null or "engagements"."planning_horizon_date" is not null),
 	CONSTRAINT "engagements_horizon_not_before_start" CHECK ("engagements"."planning_horizon_date" is null or "engagements"."planning_horizon_date" >= "engagements"."start_date"),
 	CONSTRAINT "engagements_colour_key_known" CHECK ("engagements"."colour_key" in ('moos', 'ocker', 'himmel', 'ton', 'pflaume', 'petrol', 'schiefer', 'rose'))
+);
+--> statement-breakpoint
+CREATE TABLE "idempotency_records" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"org_id" uuid NOT NULL,
+	"operation" text NOT NULL,
+	"idempotency_key" text NOT NULL,
+	"request_fingerprint" text NOT NULL,
+	"response_status" integer NOT NULL,
+	"response_body" jsonb NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "idempotency_records_org_operation_key" UNIQUE("org_id","operation","idempotency_key"),
+	CONSTRAINT "idempotency_records_status_plausible" CHECK ("idempotency_records"."response_status" between 100 and 599)
 );
 --> statement-breakpoint
 CREATE TABLE "organizations" (
@@ -135,6 +159,7 @@ CREATE TABLE "worksites" (
 	CONSTRAINT "worksites_geocode_source_known" CHECK ("worksites"."geocode_source" is null or "worksites"."geocode_source" in ('manual', 'nominatim', 'fixture'))
 );
 --> statement-breakpoint
+ALTER TABLE "audit_events" ADD CONSTRAINT "audit_events_org_id_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "customers" ADD CONSTRAINT "customers_org_id_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "day_resource_allocations" ADD CONSTRAINT "day_resource_allocations_org_id_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "day_resource_allocations" ADD CONSTRAINT "day_resource_allocations_configuration_id_worksite_day_configurations_id_fk" FOREIGN KEY ("configuration_id") REFERENCES "public"."worksite_day_configurations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -145,6 +170,7 @@ ALTER TABLE "day_team_members" ADD CONSTRAINT "day_team_members_employee_id_empl
 ALTER TABLE "employees" ADD CONSTRAINT "employees_org_id_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "engagements" ADD CONSTRAINT "engagements_org_id_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "engagements" ADD CONSTRAINT "engagements_worksite_id_worksites_id_fk" FOREIGN KEY ("worksite_id") REFERENCES "public"."worksites"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "idempotency_records" ADD CONSTRAINT "idempotency_records_org_id_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "resources" ADD CONSTRAINT "resources_org_id_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "worksite_day_configurations" ADD CONSTRAINT "worksite_day_configurations_org_id_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "worksite_day_configurations" ADD CONSTRAINT "worksite_day_configurations_worksite_day_id_worksite_days_id_fk" FOREIGN KEY ("worksite_day_id") REFERENCES "public"."worksite_days"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint

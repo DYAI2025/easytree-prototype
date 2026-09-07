@@ -79,11 +79,11 @@ jobs:
       # vorinstalliert.
       - name: Testdatenbank anlegen
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c 'create database easytree_prototype_test'
-      # Ab TASK-013 hier zusaetzlich, in dieser Reihenfolge:
-      #   - run: cp .env.example .env.local
-      #   - run: pnpm db:migrate
-      # Grund: db:migrate startet mit "node --env-file=.env.local"; fehlt die
-      # Datei, bricht Node mit Exit 9 ab. Die Job-env gewinnt gegen --env-file.
+      # Kein separater Migrationsschritt noetig: tests/integration/global-setup.ts
+      # setzt das Schema zurueck und migriert einmal pro Lauf gegen
+      # DATABASE_URL_TEST. Der urspruenglich vorgemerkte "pnpm db:migrate"
+      # haette die falsche Datenbank migriert (DATABASE_URL statt _TEST) und
+      # waere ohne .env.local mit Node-Exit 9 abgebrochen.
       - run: pnpm test:integration
 
   e2e:

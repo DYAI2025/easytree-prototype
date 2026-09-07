@@ -293,3 +293,51 @@ export const dayResourceAllocations = pgTable(
     unique("day_resource_allocations_unique").on(table.configurationId, table.resourceId),
   ],
 );
+
+/* --------------------------------------------------------------------------
+ * Infrastruktur (TASK-013c)
+ * ----------------------------------------------------------------------- */
+
+/**
+ * Idempotenz je (Mandant, Operation, Key). Gespeichert wird zusaetzlich der
+ * Fingerprint der Anfrage und die vollstaendige Erstantwort: gleicher Key mit
+ * gleichem Fingerprint liefert die gespeicherte Antwort zurueck, gleicher Key
+ * mit anderem Fingerprint ist ein Konflikt (NFR-003).
+ */
+export const idempotencyRecords = pgTable(
+  "idempotency_records",
+  {
+    id: primaryKey(),
+    orgId: orgId(),
+    operation: text("operation").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    responseStatus: integer("response_status").notNull(),
+    responseBody: jsonb("response_body").notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    unique("idempotency_records_org_operation_key").on(
+      table.orgId,
+      table.operation,
+      table.idempotencyKey,
+    ),
+    check("idempotency_records_status_plausible", sql`${table.responseStatus} between 100 and 599`),
+  ],
+);
+
+/**
+ * Append-only Audit-Log. Es gibt bewusst kein UPDATE und kein DELETE auf diese
+ * Tabelle; die Unveraenderlichkeit traegt die Anwendungsschicht (NFR-007).
+ */
+export const auditEvents = pgTable("audit_events", {
+  id: primaryKey(),
+  orgId: orgId(),
+  /** PROTOTYPE_ONLY: immer "demo-admin", solange es keine Anmeldung gibt. */
+  actor: text("actor").notNull(),
+  operation: text("operation").notNull(),
+  subjectId: uuid("subject_id"),
+  payload: jsonb("payload"),
+  correlationId: text("correlation_id"),
+  occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
+});
