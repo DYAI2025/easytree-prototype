@@ -89,7 +89,10 @@ describe("audit", () => {
       }
     };
 
-    expect(suche("update\\(auditEvents\\)")).toBe(1);
-    expect(suche("delete\\(auditEvents\\)")).toBe(1);
+    // Fuehrender Punkt: nur echte Aufrufe wie tx.update(auditEvents), nicht
+    // Prosa in Kommentaren. Ohne ihn matchte der Waechter seinen eigenen
+    // Erklaertext, sobald die Datei getrackt war.
+    expect(suche("\\.update\\(auditEvents\\)")).toBe(1);
+    expect(suche("\\.delete\\(auditEvents\\)")).toBe(1);
   });
 });
