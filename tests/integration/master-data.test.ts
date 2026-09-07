@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createDb } from "../../src/server/db/client";
 import { createCustomer } from "../../src/server/commands/create-customer";
 import { createWorksite } from "../../src/server/commands/create-worksite";
+import { upsertEmployee } from "../../src/server/commands/upsert-employee";
 import { updateWorksite } from "../../src/server/commands/update-worksite";
 import { updateCustomer } from "../../src/server/commands/update-customer";
 import { resolveTenant } from "../../src/server/tenant/tenant-context";
@@ -220,6 +221,98 @@ describe("master-data: Baustelle", () => {
     const rows = await handle.sql<
       { org_id: string }[]
     >`select org_id from worksites where id = ${worksite.id}`;
+    expect(rows[0]?.org_id).toBe(tenant.orgId);
+  });
+});
+
+describe("master-data: Mitarbeitende", () => {
+  it("legt eine Person mit optionalem Demo-Tagessatz an", async () => {
+    const anna = await upsertEmployee(deps, {
+      displayName: "Anna",
+      roleLabel: "Baumpflege",
+      dailyCostMinorUnits: "25000",
+    });
+
+    expect(anna.displayName).toBe("Anna");
+    expect(anna.roleLabel).toBe("Baumpflege");
+    expect(anna.dailyCostMinorUnits).toBe("25000");
+    expect(anna.active).toBe(true);
+  });
+
+  it("laesst den Tagessatz weg und speichert NULL statt 0", async () => {
+    const erik = await upsertEmployee(deps, { displayName: "Erik" });
+
+    expect(erik.dailyCostMinorUnits).toBeNull();
+
+    const rows = await handle.sql<{ daily_cost_minor_units: string | null }[]>`
+      select daily_cost_minor_units from employees where id = ${erik.id}
+    `;
+    expect(rows[0]?.daily_cost_minor_units).toBeNull();
+  });
+
+  it("aktualisiert eine bestehende Person ueber ihre ID", async () => {
+    const anna = await upsertEmployee(deps, { displayName: "Anna" });
+
+    const geaendert = await upsertEmployee(deps, {
+      id: anna.id,
+      displayName: "Anna Meier",
+      dailyCostMinorUnits: "30000",
+    });
+
+    expect(geaendert.id).toBe(anna.id);
+    expect(geaendert.displayName).toBe("Anna Meier");
+    expect(geaendert.dailyCostMinorUnits).toBe("30000");
+
+    const rows = await handle.sql<
+      { count: string }[]
+    >`select count(*)::text as count from employees`;
+    expect(rows[0]?.count).toBe("1");
+  });
+
+  it("weist einen negativen Tagessatz mit VALIDATION_FAILED ab", async () => {
+    await expect(
+      upsertEmployee(deps, { displayName: "Negativ", dailyCostMinorUnits: "-1" }),
+    ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+  });
+
+  it("weist einen leeren Namen ab", async () => {
+    await expect(upsertEmployee(deps, { displayName: "  " })).rejects.toMatchObject({
+      code: "VALIDATION_FAILED",
+    });
+  });
+
+  it("meldet NOT_FOUND fuer eine unbekannte ID", async () => {
+    await expect(
+      upsertEmployee(deps, { id: "b0000000-0000-4000-8000-00000000dead", displayName: "X" }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("aendert keine Person eines FREMDEN Mandanten", async () => {
+    const fremdeOrg = "b0000000-0000-4000-8000-0000000000aa";
+    const fremdePerson = "b0000000-0000-4000-8000-0000000000cc";
+    await handle.sql`insert into organizations (id, name, time_zone) values (${fremdeOrg}, 'Fremdbetrieb', 'Europe/Berlin')`;
+    await handle.sql`insert into employees (id, org_id, display_name) values (${fremdePerson}, ${fremdeOrg}, 'Fremdperson')`;
+
+    await expect(
+      upsertEmployee(deps, { id: fremdePerson, displayName: "Uebergriff" }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    const rows = await handle.sql<{ display_name: string }[]>`
+      select display_name from employees where id = ${fremdePerson}
+    `;
+    expect(rows[0]?.display_name).toBe("Fremdperson");
+  });
+
+  it("nimmt kein orgId aus der Eingabe entgegen", async () => {
+    const fremd = "b0000000-0000-4000-8000-00000000ffff";
+    const person = await upsertEmployee(deps, {
+      displayName: "Fremdversuch",
+      orgId: fremd,
+    } as Parameters<typeof upsertEmployee>[1]);
+
+    const rows = await handle.sql<
+      { org_id: string }[]
+    >`select org_id from employees where id = ${person.id}`;
     expect(rows[0]?.org_id).toBe(tenant.orgId);
   });
 });
