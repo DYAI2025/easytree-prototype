@@ -1,0 +1,4 @@
+# unrs-resolver ist der native Resolver von eslint-import-resolver-typescript.
+# Ohne freigegebenes Build-Skript bleibt die Binary ungebaut.
+onlyBuiltDependencies:
+  - unrs-resolver

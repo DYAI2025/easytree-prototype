@@ -1,0 +1,15 @@
+/* Basisstile. Tokens und Tailwind folgen in TASK-004. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+}
