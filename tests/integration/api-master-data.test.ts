@@ -5,6 +5,11 @@ import {
   POST as createCustomerRoute,
 } from "../../src/app/api/auftraggeber/route";
 import { PATCH as patchCustomerRoute } from "../../src/app/api/auftraggeber/[id]/route";
+import {
+  GET as listWorksitesRoute,
+  POST as createWorksiteRoute,
+} from "../../src/app/api/baustellen/route";
+import { PATCH as patchWorksiteRoute } from "../../src/app/api/baustellen/[id]/route";
 import { createDb } from "../../src/server/db/client";
 import { setDbForTests } from "../../src/server/db/connection";
 import { resolveTenant } from "../../src/server/tenant/tenant-context";
@@ -98,5 +103,115 @@ describe("api-master-data: Auftraggeber", () => {
 
     expect(response.status).toBe(404);
     expect(body.type).toBe("urn:easytree-prototype:problem:NOT_FOUND");
+  });
+});
+
+describe("api-master-data: Baustellen", () => {
+  async function auftraggeber(): Promise<string> {
+    const response = await createCustomerRoute(
+      post("http://localhost/api/auftraggeber", { name: "Stadtwerke" }),
+    );
+    return (await response.json()).id;
+  }
+
+  it("legt per POST an und liefert 201 mit ID", async () => {
+    const kunde = await auftraggeber();
+
+    const response = await createWorksiteRoute(
+      post("http://localhost/api/baustellen", {
+        customerId: kunde,
+        name: "Parkanlage Nordring",
+        addressLine: "Nordring 12",
+        postalCode: "14467",
+        city: "Potsdam",
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(body.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(body.customerId).toBe(kunde);
+  });
+
+  it("listet und filtert nach Auftraggeber", async () => {
+    const kunde = await auftraggeber();
+    await createWorksiteRoute(
+      post("http://localhost/api/baustellen", {
+        customerId: kunde,
+        name: "Parkanlage",
+        addressLine: "Nordring 12",
+      }),
+    );
+
+    const alle = await (
+      await listWorksitesRoute(new Request("http://localhost/api/baustellen"))
+    ).json();
+    expect(alle.items).toHaveLength(1);
+
+    const gefiltert = await (
+      await listWorksitesRoute(
+        new Request(`http://localhost/api/baustellen?auftraggeberId=${kunde}`),
+      )
+    ).json();
+    expect(gefiltert.items).toHaveLength(1);
+
+    const leer = await (
+      await listWorksitesRoute(
+        new Request(
+          "http://localhost/api/baustellen?auftraggeberId=b0000000-0000-4000-8000-00000000dead",
+        ),
+      )
+    ).json();
+    expect(leer.items).toHaveLength(0);
+  });
+
+  it("aendert per PATCH", async () => {
+    const kunde = await auftraggeber();
+    const angelegt = await (
+      await createWorksiteRoute(
+        post("http://localhost/api/baustellen", {
+          customerId: kunde,
+          name: "Alt",
+          addressLine: "Nordring 12",
+        }),
+      )
+    ).json();
+
+    const response = await patchWorksiteRoute(
+      patch(`http://localhost/api/baustellen/${angelegt.id}`, { name: "Neu" }),
+      { params: Promise.resolve({ id: angelegt.id }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).name).toBe("Neu");
+  });
+
+  it("weist eine halbe Koordinate mit 400 ab", async () => {
+    const kunde = await auftraggeber();
+
+    const response = await createWorksiteRoute(
+      post("http://localhost/api/baustellen", {
+        customerId: kunde,
+        name: "Halbe Koordinate",
+        addressLine: "Nordring 12",
+        lat: 52.4,
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(response.headers.get("content-type")).toContain("application/problem+json");
+  });
+
+  it("meldet 404 fuer einen unbekannten Auftraggeber", async () => {
+    const response = await createWorksiteRoute(
+      post("http://localhost/api/baustellen", {
+        customerId: "b0000000-0000-4000-8000-00000000dead",
+        name: "Ins Leere",
+        addressLine: "Nordring 12",
+      }),
+    );
+
+    expect(response.status).toBe(404);
+    expect((await response.json()).type).toBe("urn:easytree-prototype:problem:NOT_FOUND");
   });
 });

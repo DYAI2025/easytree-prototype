@@ -54,8 +54,13 @@ export const CreateWorksiteCommand = coordinatePair({
   notes: optionalText(),
 });
 
-export const UpdateWorksiteCommand = coordinatePair({
-  id: z.uuid(),
+/*
+ * Die Aenderungsfelder werden aus EINER Shape zu zwei Schemas geformt: einmal
+ * ohne id fuer den Request-Body, einmal mit id fuer den Command. Zod kann ein
+ * Objekt mit Refinement nicht per omit beschneiden - der Versuch endet mit
+ * "cannot be used on object schemas containing refinements".
+ */
+const updateWorksiteFields = {
   name: nonBlankText().optional(),
   addressLine: nonBlankText(300).optional(),
   postalCode: optionalText(20),
@@ -65,4 +70,11 @@ export const UpdateWorksiteCommand = coordinatePair({
   geocodeSource: z.enum(GEOCODE_SOURCES).optional(),
   notes: optionalText(),
   active: z.boolean().optional(),
+};
+
+export const UpdateWorksiteBody = coordinatePair(updateWorksiteFields);
+
+export const UpdateWorksiteCommand = coordinatePair({
+  id: z.uuid(),
+  ...updateWorksiteFields,
 });
