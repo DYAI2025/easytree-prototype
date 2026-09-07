@@ -5,11 +5,19 @@ import { z } from "zod";
  * Wire-Format ist ein Dezimalstring: JSON.stringify wirft bei bigint, und
  * `number` verloere ab 2^53 still an Genauigkeit.
  */
-export const MinorUnitsSchema = z
+/** Wire-Format: der rohe Dezimalstring, wie er ueber JSON geht. */
+export const MinorUnitsWireSchema = z
   .string()
   .trim()
   .regex(/^\d+$/, "Nur nicht-negative ganze Minor Units")
   .max(19);
+
+/**
+ * Eingabeformat: derselbe Dezimalstring, aber als bigint ausgeliefert. Die
+ * Domaene rechnet mit bigint, die Grenze konvertiert - und zwar genau hier,
+ * damit kein Aufrufer es vergisst.
+ */
+export const MinorUnitsSchema = MinorUnitsWireSchema.transform((value) => BigInt(value));
 
 export function toWire(value: bigint): string {
   return value.toString();

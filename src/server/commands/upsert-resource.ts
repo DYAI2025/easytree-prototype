@@ -1,6 +1,5 @@
 import { and, eq } from "drizzle-orm";
 
-import { fromWire } from "../../contracts/common";
 import { UpsertResourceCommand, type Resource, type ResourceKind } from "../../contracts/resource";
 import { recordAudit } from "../audit/audit-log";
 import { withTransaction } from "../db/client";
@@ -47,7 +46,7 @@ export async function upsertResource(deps: CommandDeps, input: unknown): Promise
       name: command.name,
       identifier: command.identifier ?? null,
       dailyCostMinorUnits:
-        command.dailyCostMinorUnits === undefined ? null : fromWire(command.dailyCostMinorUnits),
+        command.dailyCostMinorUnits === undefined ? null : command.dailyCostMinorUnits,
       costNote: command.costNote ?? null,
       ...(command.active === undefined ? {} : { active: command.active }),
     };

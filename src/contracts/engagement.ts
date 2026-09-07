@@ -8,8 +8,11 @@ import { nonBlankText, optionalText } from "./customer";
  * Vertraege fuer die Einsatz-Anlage (FR-004, FR-005).
  *
  * `endDate` ist optional; bei offenem Ende ist `planningHorizonDate` Pflicht.
- * Die Regel steht in der Domaene (validateEngagementPeriod), im Vertrag und
- * als CHECK in der Datenbank - drei Instanzen, keine davon allein tragend.
+ * Diese Kreuzregel steht BEWUSST NICHT hier, sondern in der Domaene
+ * (validateEngagementPeriod) und als CHECK in der Datenbank. Wuerde das Schema
+ * sie erzwingen, antwortete die API mit dem unspezifischen 400
+ * VALIDATION_FAILED statt mit dem genauen 422 PLANNING_HORIZON_REQUIRED, und
+ * der Domaenenpfad waere ueber HTTP nicht mehr erreichbar.
  *
  * Geplante Uhrzeiten sind optional (Human-PO-Vertrag D-004 superseded); die
  * Vorbelegung 08:00-18:00 ist eine UI-Entscheidung, keine Pflicht im Modell.
@@ -19,8 +22,12 @@ export const CreateEngagementCommand = z.object({
   title: nonBlankText(200),
   description: optionalText(),
   startDate: LocalDateSchema,
-  endDate: LocalDateSchema.optional(),
-  planningHorizonDate: LocalDateSchema.optional(),
+  /**
+   * `null` und Weglassen bedeuten beide "offenes Ende". Beides wird auf
+   * `undefined` normalisiert, damit die Command-Schicht nur EINEN Fall kennt.
+   */
+  endDate: LocalDateSchema.nullish().transform((value) => value ?? undefined),
+  planningHorizonDate: LocalDateSchema.nullish().transform((value) => value ?? undefined),
   colourKey: z.enum(COLOUR_KEYS),
   plannedStartTime: LocalTimeSchema.optional(),
   plannedEndTime: LocalTimeSchema.optional(),
