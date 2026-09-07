@@ -1,0 +1,101 @@
+"use client";
+
+import { MAX_VISIBLE_CARDS_PER_DAY } from "../../domain/month-grid";
+
+export interface DayCardModel {
+  readonly worksiteDayId: string;
+  readonly engagementId: string;
+  readonly title: string;
+  readonly worksiteName: string;
+  readonly colourKey: string;
+  readonly employeeCount: number;
+  readonly resourceCount: number;
+}
+
+function anzahlText(anzahl: number, singular: string, plural: string): string {
+  return `${anzahl} ${anzahl === 1 ? singular : plural}`;
+}
+
+/**
+ * Eine Karte je BAUSTELLENTAG - nicht je Mitarbeiter.
+ *
+ * Die Teamgroesse steht als Zahl auf der Karte ("5 Personen"), nicht als
+ * fuenf Zeilen. Das ist die Kernentscheidung des Produkts; sie hier zu
+ * verletzen waere Drift.
+ *
+ * Farbe ist ausschliesslich Orientierung: der Farbmarker ist aria-hidden und
+ * traegt keinen Text. Jede Information steht zusaetzlich als Text.
+ */
+export function DayCard({
+  card,
+  onOpen,
+}: {
+  readonly card: DayCardModel;
+  readonly onOpen: (worksiteDayId: string) => void;
+}) {
+  const zusammenfassung = `${card.worksiteName} · ${anzahlText(card.employeeCount, "Person", "Personen")} · ${anzahlText(card.resourceCount, "Ressource", "Ressourcen")}`;
+  const vollText = `${card.title} — ${zusammenfassung}`;
+
+  return (
+    <button
+      type="button"
+      data-testid="tageskarte"
+      data-farbe={card.colourKey}
+      data-engagement-id={card.engagementId}
+      data-worksite-day-id={card.worksiteDayId}
+      title={vollText}
+      aria-label={vollText}
+      onClick={() => onOpen(card.worksiteDayId)}
+      className="flex w-full items-stretch gap-1 rounded border border-line bg-surface text-left text-xs"
+    >
+      <span
+        data-testid="farbmarker"
+        aria-hidden="true"
+        className={`w-1 shrink-0 rounded-l bg-${card.colourKey}-frame`}
+      />
+      <span className="min-w-0 flex-1 p-1">
+        <span data-truncate="true" className="block truncate font-medium">
+          {card.title}
+        </span>
+        <span data-truncate="true" className="block truncate text-ink-muted">
+          {zusammenfassung}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+/**
+ * Mehrere Einsaetze am selben Tag stapeln untereinander. Ab der vierten Karte
+ * fasst ein Button zusammen, damit die Zelle nicht unbegrenzt waechst.
+ */
+export function DayCardStack({
+  cards,
+  onOpen,
+  onMore,
+}: {
+  readonly cards: readonly DayCardModel[];
+  readonly onOpen: (worksiteDayId: string) => void;
+  readonly onMore: () => void;
+}) {
+  const sichtbar = cards.slice(0, MAX_VISIBLE_CARDS_PER_DAY);
+  const weitere = cards.length - sichtbar.length;
+
+  return (
+    <span className="mt-1 flex flex-col gap-1">
+      {sichtbar.map((card) => (
+        <DayCard key={card.worksiteDayId} card={card} onOpen={onOpen} />
+      ))}
+      {weitere > 0 && (
+        <button
+          type="button"
+          data-testid="mehr-karten"
+          onClick={onMore}
+          className="rounded border border-line px-1 text-xs text-ink-muted"
+        >
+          {`+${weitere} weitere`}
+        </button>
+      )}
+    </span>
+  );
+}
