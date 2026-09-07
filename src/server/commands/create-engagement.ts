@@ -1,3 +1,5 @@
+import { and, eq, inArray } from "drizzle-orm";
+
 import { validateEngagementPeriod } from "../../domain/engagement-rules";
 import { parseLocalDate, type LocalDate } from "../../domain/local-date";
 import { DomainRuleError } from "../../domain/workday-derivation";
@@ -97,6 +99,31 @@ async function materialise(
     .returning({ id: engagements.id });
 
   const engagementId = engagement!.id;
+
+  // D-008: hoechstens ein Einsatzkontext je Baustelle und lokalem Tag. Der
+  // UNIQUE-Index in der Datenbank traegt die Regel; diese Abfrage existiert nur,
+  // damit der Fehler die KONFLIKTTAGE benennen kann statt eines nackten 23505.
+  // Der Index bleibt die letzte Instanz - zwischen Abfrage und Insert koennte
+  // eine parallele Transaktion dazwischenkommen.
+  const belegte = await tx
+    .select({ localDate: worksiteDays.localDate })
+    .from(worksiteDays)
+    .where(
+      and(
+        eq(worksiteDays.orgId, deps.tenant.orgId),
+        eq(worksiteDays.worksiteId, command.worksiteId),
+        inArray(worksiteDays.localDate, days),
+      ),
+    );
+
+  if (belegte.length > 0) {
+    const konflikte = belegte.map((row) => row.localDate).sort();
+
+    throw new DomainRuleError(
+      "WORKSITE_DAY_ALREADY_PLANNED",
+      `An dieser Baustelle sind folgende Tage bereits verplant: ${konflikte.join(", ")}.`,
+    );
+  }
 
   const dayRows = await tx
     .insert(worksiteDays)

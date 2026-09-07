@@ -16,6 +16,7 @@ const clock = fixedClock("2026-09-07T08:00:00Z");
 const deps = { db: handle.db, tenant, clock, correlationId: "corr-eng" };
 
 let worksiteA = "";
+let worksiteB = "";
 let anna = "";
 let hebebuehne = "";
 
@@ -33,6 +34,13 @@ beforeEach(async () => {
       customerId: kunde.id,
       name: "Parkanlage Nord",
       addressLine: "Musterweg 1",
+    })
+  ).id;
+  worksiteB = (
+    await createWorksite(deps, {
+      customerId: kunde.id,
+      name: "Allee Sued",
+      addressLine: "Musterweg 2",
     })
   ).id;
   anna = (await upsertEmployee(deps, { displayName: "Anna" })).id;
@@ -208,5 +216,67 @@ describe("create-engagement", () => {
       { count: string }[]
     >`select count(*)::text as count from engagements`;
     expect(zeilen[0]?.count).toBe("1");
+  });
+
+  it("verhindert einen zweiten Einsatz mit ueberlappendem Tag an DERSELBEN Baustelle", async () => {
+    const erster = await createEngagement(deps, basis());
+
+    await expect(
+      createEngagement(deps, {
+        ...basis(),
+        title: "Zweiter Versuch",
+        startDate: "2026-09-16",
+        endDate: "2026-09-25",
+      }),
+    ).rejects.toMatchObject({ code: "WORKSITE_DAY_ALREADY_PLANNED" });
+
+    // Der erste Einsatz bleibt vollstaendig und unveraendert.
+    const tage = await handle.sql<
+      { count: string }[]
+    >`select count(*)::text as count from worksite_days`;
+    const eins = await handle.sql<
+      { count: string }[]
+    >`select count(*)::text as count from engagements`;
+    expect(tage[0]?.count).toBe("10");
+    expect(eins[0]?.count).toBe("1");
+    expect(erster.worksiteDayIds).toHaveLength(10);
+  });
+
+  it("nennt die Konflikttage in der Fehlermeldung", async () => {
+    await createEngagement(deps, basis());
+
+    let fehler: { code?: string; message?: string } = {};
+
+    try {
+      await createEngagement(deps, {
+        ...basis(),
+        title: "Zweiter Versuch",
+        startDate: "2026-09-16",
+        endDate: "2026-09-25",
+      });
+      throw new Error("Erwartet wurde ein Konflikt, es gab aber keinen.");
+    } catch (error) {
+      fehler = error as { code?: string; message?: string };
+    }
+
+    expect(fehler.code).toBe("WORKSITE_DAY_ALREADY_PLANNED");
+    // 16., 17. und 18.09. sind bereits belegt, der 21.09. nicht mehr.
+    expect(fehler.message ?? "").toContain("2026-09-16");
+    expect(fehler.message ?? "").toContain("2026-09-17");
+    expect(fehler.message ?? "").toContain("2026-09-18");
+    expect(fehler.message ?? "").not.toContain("2026-09-21");
+  });
+
+  it("erlaubt denselben Tag an einer ANDEREN Baustelle", async () => {
+    await createEngagement(deps, basis());
+
+    const zweiter = await createEngagement(deps, { ...basis(), worksiteId: worksiteB });
+
+    expect(zweiter.worksiteDayIds).toHaveLength(10);
+
+    const zeilen = await handle.sql<
+      { count: string }[]
+    >`select count(*)::text as count from worksite_days`;
+    expect(zeilen[0]?.count).toBe("20");
   });
 });
