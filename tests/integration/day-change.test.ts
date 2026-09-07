@@ -4,6 +4,7 @@ import { fixedClock } from "../../src/server/clock/clock";
 import { createCustomer } from "../../src/server/commands/create-customer";
 import { createEngagement } from "../../src/server/commands/create-engagement";
 import { createWorksite } from "../../src/server/commands/create-worksite";
+import { previewSeriesChange } from "../../src/server/commands/preview-series-change";
 import { updateWorksiteDay } from "../../src/server/commands/update-worksite-day";
 import { upsertEmployee } from "../../src/server/commands/upsert-employee";
 import { createDb } from "../../src/server/db/client";
@@ -176,5 +177,79 @@ describe("day-change", () => {
       select count(*)::text as count from audit_events where operation = 'update_worksite_day'
     `;
     expect(rows[0]?.count).toBe("1");
+  });
+
+  it("liefert fuer jeden Folgetag ID und Status", async () => {
+    const vorschau = await previewSeriesChange(deps, {
+      worksiteDayId: tagVom("2026-09-10"),
+      includeAdjustedDayIds: [],
+    });
+
+    // Ab dem 10.09.: 10., 11., 14., 15., 16., 17., 18. = sieben Tage.
+    expect(vorschau.rows).toHaveLength(7);
+    expect(vorschau.rows.map((r) => r.date)).toEqual([
+      "2026-09-10",
+      "2026-09-11",
+      "2026-09-14",
+      "2026-09-15",
+      "2026-09-16",
+      "2026-09-17",
+      "2026-09-18",
+    ]);
+    expect(vorschau.rows.every((r) => r.worksiteDayId.length === 36)).toBe(true);
+    expect(vorschau.rows.every((r) => r.status === "unchanged")).toBe(true);
+    expect(vorschau.targetIds).toHaveLength(7);
+  });
+
+  it("markiert einen zuvor einzeln geaenderten Folgetag als adjusted_excluded", async () => {
+    // 2026-09-15 bekommt zuerst eine Einzelaenderung.
+    await updateWorksiteDay(deps, {
+      worksiteDayId: tagVom("2026-09-15"),
+      scope: "ONLY_THIS_DAY",
+      expectedRevisionNo: 1,
+      changes: { note: "Individuell angepasst" },
+    });
+
+    const vorschau = await previewSeriesChange(deps, {
+      worksiteDayId: tagVom("2026-09-10"),
+      includeAdjustedDayIds: [],
+    });
+
+    const angepasst = vorschau.rows.find((r) => r.date === "2026-09-15");
+    expect(angepasst?.status).toBe("adjusted_excluded");
+    expect(vorschau.targetIds).not.toContain(tagVom("2026-09-15"));
+    expect(vorschau.targetIds).toHaveLength(6);
+    expect(vorschau.adjustedCount).toBe(1);
+  });
+
+  it("zeigt einen ausdruecklich einbezogenen Tag als adjusted_included", async () => {
+    await updateWorksiteDay(deps, {
+      worksiteDayId: tagVom("2026-09-15"),
+      scope: "ONLY_THIS_DAY",
+      expectedRevisionNo: 1,
+      changes: { note: "Individuell angepasst" },
+    });
+
+    const vorschau = await previewSeriesChange(deps, {
+      worksiteDayId: tagVom("2026-09-10"),
+      includeAdjustedDayIds: [tagVom("2026-09-15")],
+    });
+
+    expect(vorschau.rows.find((r) => r.date === "2026-09-15")?.status).toBe("adjusted_included");
+    expect(vorschau.targetIds).toContain(tagVom("2026-09-15"));
+    expect(vorschau.targetIds).toHaveLength(7);
+  });
+
+  it("sperrt vergangene Tage auch in der Vorschau", async () => {
+    const spaeter = { ...deps, clock: fixedClock("2026-09-16T08:00:00Z") };
+
+    const vorschau = await previewSeriesChange(spaeter, {
+      worksiteDayId: tagVom("2026-09-14"),
+      includeAdjustedDayIds: [],
+    });
+
+    expect(vorschau.rows.find((r) => r.date === "2026-09-14")?.status).toBe("past_locked");
+    expect(vorschau.rows.find((r) => r.date === "2026-09-15")?.status).toBe("past_locked");
+    expect(vorschau.targetIds).not.toContain(tagVom("2026-09-14"));
   });
 });
