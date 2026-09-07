@@ -10,6 +10,16 @@ import {
   POST as createWorksiteRoute,
 } from "../../src/app/api/baustellen/route";
 import { PATCH as patchWorksiteRoute } from "../../src/app/api/baustellen/[id]/route";
+import {
+  GET as listEmployeesRoute,
+  POST as createEmployeeRoute,
+} from "../../src/app/api/mitarbeitende/route";
+import { PATCH as patchEmployeeRoute } from "../../src/app/api/mitarbeitende/[id]/route";
+import {
+  GET as listResourcesRoute,
+  POST as createResourceRoute,
+} from "../../src/app/api/ressourcen/route";
+import { PATCH as patchResourceRoute } from "../../src/app/api/ressourcen/[id]/route";
 import { createDb } from "../../src/server/db/client";
 import { setDbForTests } from "../../src/server/db/connection";
 import { resolveTenant } from "../../src/server/tenant/tenant-context";
@@ -213,5 +223,139 @@ describe("api-master-data: Baustellen", () => {
 
     expect(response.status).toBe(404);
     expect((await response.json()).type).toBe("urn:easytree-prototype:problem:NOT_FOUND");
+  });
+});
+
+describe("api-master-data: Mitarbeitende", () => {
+  it("legt per POST an und liefert 201 mit ID", async () => {
+    const response = await createEmployeeRoute(
+      post("http://localhost/api/mitarbeitende", {
+        displayName: "Anna Bergmann",
+        roleLabel: "Teamleitung",
+        dailyCostMinorUnits: "32000",
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(body.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(body.dailyCostMinorUnits).toBe("32000");
+  });
+
+  it("listet und haelt einen fehlenden Tagessatz als null", async () => {
+    await createEmployeeRoute(
+      post("http://localhost/api/mitarbeitende", { displayName: "Erik Sommer" }),
+    );
+
+    const body = await (
+      await listEmployeesRoute(new Request("http://localhost/api/mitarbeitende"))
+    ).json();
+
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0].dailyCostMinorUnits).toBeNull();
+  });
+
+  it("aendert per PATCH", async () => {
+    const angelegt = await (
+      await createEmployeeRoute(post("http://localhost/api/mitarbeitende", { displayName: "Alt" }))
+    ).json();
+
+    const response = await patchEmployeeRoute(
+      patch(`http://localhost/api/mitarbeitende/${angelegt.id}`, { displayName: "Neu" }),
+      { params: Promise.resolve({ id: angelegt.id }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).displayName).toBe("Neu");
+  });
+
+  it("weist einen negativen Tagessatz mit 400 ab", async () => {
+    const response = await createEmployeeRoute(
+      post("http://localhost/api/mitarbeitende", {
+        displayName: "Negativ",
+        dailyCostMinorUnits: "-1",
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(response.headers.get("content-type")).toContain("application/problem+json");
+  });
+
+  it("meldet 404 fuer eine unbekannte ID", async () => {
+    const response = await patchEmployeeRoute(
+      patch("http://localhost/api/mitarbeitende/b0000000-0000-4000-8000-00000000dead", {
+        displayName: "X",
+      }),
+      { params: Promise.resolve({ id: "b0000000-0000-4000-8000-00000000dead" }) },
+    );
+
+    expect(response.status).toBe(404);
+  });
+});
+
+describe("api-master-data: Ressourcen", () => {
+  it("legt per POST an und liefert 201 mit ID", async () => {
+    const response = await createResourceRoute(
+      post("http://localhost/api/ressourcen", {
+        kind: "machine",
+        name: "Hebebuehne HB-18",
+        identifier: "HB-18",
+        dailyCostMinorUnits: "45000",
+      }),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(body.kind).toBe("machine");
+    expect(body.dailyCostMinorUnits).toBe("45000");
+  });
+
+  it("listet die angelegte Ressource", async () => {
+    await createResourceRoute(
+      post("http://localhost/api/ressourcen", { kind: "equipment", name: "Seilklettersatz B" }),
+    );
+
+    const body = await (
+      await listResourcesRoute(new Request("http://localhost/api/ressourcen"))
+    ).json();
+
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0].dailyCostMinorUnits).toBeNull();
+  });
+
+  it("aendert per PATCH", async () => {
+    const angelegt = await (
+      await createResourceRoute(
+        post("http://localhost/api/ressourcen", { kind: "vehicle", name: "Alt" }),
+      )
+    ).json();
+
+    const response = await patchResourceRoute(
+      patch(`http://localhost/api/ressourcen/${angelegt.id}`, { kind: "vehicle", name: "Neu" }),
+      { params: Promise.resolve({ id: angelegt.id }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).name).toBe("Neu");
+  });
+
+  it("weist einen unbekannten Typ mit 400 ab", async () => {
+    const response = await createResourceRoute(
+      post("http://localhost/api/ressourcen", { kind: "raumschiff", name: "Falsch" }),
+    );
+
+    expect(response.status).toBe(400);
+  });
+
+  it("meldet 404 fuer eine unbekannte ID", async () => {
+    const response = await patchResourceRoute(
+      patch("http://localhost/api/ressourcen/b0000000-0000-4000-8000-00000000dead", {
+        kind: "machine",
+        name: "X",
+      }),
+      { params: Promise.resolve({ id: "b0000000-0000-4000-8000-00000000dead" }) },
+    );
+
+    expect(response.status).toBe(404);
   });
 });

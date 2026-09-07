@@ -33,6 +33,12 @@ describe("MinorUnitsSchema", () => {
     expect(wert).toBe(25000n);
   });
 
+  it("ist idempotent: ein bereits konvertiertes bigint kommt durch", () => {
+    // Auf dem HTTP-Pfad parsen defineRoute UND der Command denselben Body.
+    expect(MinorUnitsSchema.parse(MinorUnitsSchema.parse("25000"))).toBe(25000n);
+    expect(MinorUnitsSchema.safeParse(-1n).success).toBe(false);
+  });
+
   it("weist negative und gebrochene Werte ab", () => {
     expect(MinorUnitsSchema.safeParse("-1").success).toBe(false);
     expect(MinorUnitsSchema.safeParse("1.5").success).toBe(false);

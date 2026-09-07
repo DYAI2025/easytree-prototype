@@ -16,8 +16,16 @@ export const MinorUnitsWireSchema = z
  * Eingabeformat: derselbe Dezimalstring, aber als bigint ausgeliefert. Die
  * Domaene rechnet mit bigint, die Grenze konvertiert - und zwar genau hier,
  * damit kein Aufrufer es vergisst.
+ *
+ * Das Schema ist IDEMPOTENT: es nimmt auch ein bereits konvertiertes bigint an.
+ * Auf dem HTTP-Pfad wird zweimal geparst - einmal von defineRoute fuer die
+ * Feldfehler in meta.issues, einmal vom Command als eigener Wahrheitsinstanz.
+ * Ohne diese Idempotenz scheiterte der zweite Durchlauf am eigenen Ergebnis.
  */
-export const MinorUnitsSchema = MinorUnitsWireSchema.transform((value) => BigInt(value));
+export const MinorUnitsSchema = z.union([
+  MinorUnitsWireSchema.transform((value) => BigInt(value)),
+  z.bigint().nonnegative(),
+]);
 
 export function toWire(value: bigint): string {
   return value.toString();
