@@ -81,7 +81,7 @@ export function validateEngagementPeriod(
     // Die Ableitung wirft; hier wird daraus ein Code, damit der Aufrufer alle
     // Verstoesse gemeinsam bekommt statt eines abgebrochenen Laufs.
     if (error instanceof DomainRuleError) {
-      codes.push(error.code as ProblemCode);
+      codes.push(error.code);
       return { ok: false, codes };
     }
 

@@ -5,6 +5,7 @@ import {
   isWeekend,
   type LocalDate,
 } from "./local-date";
+import type { ProblemCode } from "./problem-codes";
 
 /**
  * Obergrenze materialisierter Tage je Einsatz-Erzeugung (Annahme A-10).
@@ -15,13 +16,14 @@ import {
 export const MAX_DAYS_PER_MATERIALISATION = 366;
 
 /**
- * Fehler der Domaenenregeln. `code` ist der Problemcode aus Abschnitt 5.12;
- * die Zuordnung zu HTTP-Status liegt in `problem-codes.ts` (TASK-008).
+ * Fehler der Domaenenregeln. `code` ist auf die Union aus `problem-codes.ts`
+ * eingeschraenkt, damit ein Tippfehler beim Werfen schon der Typecheck faengt
+ * und der Problem-JSON-Layer (TASK-021) ohne Cast auf den Status abbilden kann.
  */
 export class DomainRuleError extends Error {
-  readonly code: string;
+  readonly code: ProblemCode;
 
-  constructor(code: string, detail: string) {
+  constructor(code: ProblemCode, detail: string) {
     super(detail);
     this.name = "DomainRuleError";
     this.code = code;
