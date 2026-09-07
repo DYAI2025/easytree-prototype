@@ -58,7 +58,13 @@ export default defineConfig({
         url: BASE_URL,
         // Ein Next-Produktionsbuild ueberschreitet die Vorgabe von 60 s deutlich.
         timeout: 300_000,
-        reuseExistingServer: !process.env.CI,
+        // Bewusst IMMER false (Plan sagt !process.env.CI): mit Wiederverwendung
+        // testet Playwright stillschweigend gegen einen fremden oder veralteten
+        // Server, der den Port schon haelt, und meldet gruen. Belegt am 07.09.2026:
+        // PID 63735, next-server v16.2.11, PPID 1, hielt Port 3000. Lieber laut
+        // scheitern ("port already in use") als leise das Falsche pruefen.
+        // Lokal deshalb mit freiem Port laufen lassen, z. B. PORT=3100.
+        reuseExistingServer: false,
         // Default waere "ignore" - dann ist ein fehlgeschlagener Build in CI
         // unsichtbar und man sieht nur den Timeout, nicht die Ursache.
         stdout: "pipe",
