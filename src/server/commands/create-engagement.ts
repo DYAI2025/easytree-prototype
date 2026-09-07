@@ -160,6 +160,7 @@ async function materialise(
     throw new DomainRuleError(
       "WORKSITE_DAY_ALREADY_PLANNED",
       `An dieser Baustelle sind folgende Tage bereits verplant: ${konflikte.join(", ")}.`,
+      { conflictingDates: konflikte },
     );
   }
 
