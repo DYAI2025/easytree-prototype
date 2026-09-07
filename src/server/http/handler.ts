@@ -4,9 +4,11 @@ import { DomainRuleError } from "../../domain/workday-derivation";
 import { CORRELATION_HEADER, resolveCorrelationId } from "./correlation";
 import { buildProblem, problemResponse } from "./problem";
 
-export interface RouteContext<TParams, TBody> {
+export type RouteParams = Record<string, string>;
+
+export interface RouteContext<TBody> {
   readonly request: Request;
-  readonly params: TParams;
+  readonly params: RouteParams;
   readonly body: TBody;
   readonly correlationId: string;
 }
@@ -16,15 +18,15 @@ export interface RouteContext<TParams, TBody> {
  * `defineRoute` awaitet sie EINMAL und gibt ein einfaches Objekt weiter - damit
  * steht diese Signatur an genau einer Stelle im Repo.
  */
-export interface NextRouteContext<TParams> {
-  readonly params: Promise<TParams>;
+export interface NextRouteContext {
+  readonly params: Promise<RouteParams>;
 }
 
-export interface RouteConfig<TParams, TSchema extends z.ZodType | undefined> {
+export interface RouteConfig<TSchema extends z.ZodType | undefined> {
   readonly bodySchema?: TSchema;
   readonly status?: number;
   readonly handler: (
-    ctx: RouteContext<TParams, TSchema extends z.ZodType ? z.output<TSchema> : undefined>,
+    ctx: RouteContext<TSchema extends z.ZodType ? z.output<TSchema> : undefined>,
   ) => Promise<unknown>;
 }
 
@@ -37,19 +39,15 @@ export interface RouteConfig<TParams, TSchema extends z.ZodType | undefined> {
  * vollstaendige Adresse enthalten. Protokolliert werden nur Code und
  * Correlation-ID; der Rest ist ueber die Correlation-ID nachvollziehbar.
  */
-export function defineRoute<
-  TParams extends Record<string, string> = Record<string, string>,
-  TSchema extends z.ZodType | undefined = undefined,
->(config: RouteConfig<TParams, TSchema>) {
-  return async function route(
-    request: Request,
-    nextContext?: NextRouteContext<TParams>,
-  ): Promise<Response> {
+export function defineRoute<TSchema extends z.ZodType | undefined = undefined>(
+  config: RouteConfig<TSchema>,
+) {
+  return async function route(request: Request, nextContext?: NextRouteContext): Promise<Response> {
     const correlationId = resolveCorrelationId(request.headers);
     const responseHeaders = { [CORRELATION_HEADER]: correlationId };
 
     try {
-      const params = ((await nextContext?.params) ?? {}) as TParams;
+      const params: RouteParams = (await nextContext?.params) ?? {};
       let body: unknown = undefined;
 
       if (config.bodySchema !== undefined) {

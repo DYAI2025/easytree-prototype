@@ -89,7 +89,7 @@ describe("defineRoute", () => {
   });
 
   it("reicht die in Next 16 asynchronen Routenparameter ausgepackt weiter", async () => {
-    const route = defineRoute<{ id: string }>({
+    const route = defineRoute({
       handler: async (ctx) => ({ id: ctx.params.id }),
     });
 
