@@ -19,7 +19,8 @@
     "db:up": "docker compose up -d db",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node --env-file=.env.local --import tsx scripts/db-migrate.ts",
-    "db:reset": "node --env-file=.env.local --import tsx scripts/db-reset.ts"
+    "db:reset": "node --env-file=.env.local --import tsx scripts/db-reset.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "class-variance-authority": "0.7.1",
@@ -34,6 +35,8 @@
     "zod": "4.5.4"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.63.0",
     "@tailwindcss/postcss": "4.3.3",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^7.0.1",
