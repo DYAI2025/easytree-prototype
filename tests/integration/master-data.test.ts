@@ -4,6 +4,7 @@ import { createDb } from "../../src/server/db/client";
 import { createCustomer } from "../../src/server/commands/create-customer";
 import { createWorksite } from "../../src/server/commands/create-worksite";
 import { upsertEmployee } from "../../src/server/commands/upsert-employee";
+import { upsertResource } from "../../src/server/commands/upsert-resource";
 import { updateWorksite } from "../../src/server/commands/update-worksite";
 import { updateCustomer } from "../../src/server/commands/update-customer";
 import { resolveTenant } from "../../src/server/tenant/tenant-context";
@@ -313,6 +314,86 @@ describe("master-data: Mitarbeitende", () => {
     const rows = await handle.sql<
       { org_id: string }[]
     >`select org_id from employees where id = ${person.id}`;
+    expect(rows[0]?.org_id).toBe(tenant.orgId);
+  });
+});
+
+describe("master-data: Ressourcen", () => {
+  it("legt eine Ressource mit Typ und Kennung an", async () => {
+    const hebebuehne = await upsertResource(deps, {
+      kind: "machine",
+      name: "Hebebuehne",
+      identifier: "INV-2026-004",
+      dailyCostMinorUnits: "12000",
+    });
+
+    expect(hebebuehne.kind).toBe("machine");
+    expect(hebebuehne.identifier).toBe("INV-2026-004");
+    expect(hebebuehne.dailyCostMinorUnits).toBe("12000");
+  });
+
+  it("kennt genau die drei zugelassenen Typen", async () => {
+    for (const kind of ["vehicle", "machine", "equipment"]) {
+      const angelegt = await upsertResource(deps, { kind, name: `Typ ${kind}` });
+      expect(angelegt.kind).toBe(kind);
+    }
+
+    await expect(
+      upsertResource(deps, { kind: "raumschiff", name: "Falscher Typ" }),
+    ).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+  });
+
+  it("speichert einen fehlenden Tagessatz als NULL", async () => {
+    const geraet = await upsertResource(deps, { kind: "equipment", name: "Ohne Satz" });
+
+    expect(geraet.dailyCostMinorUnits).toBeNull();
+
+    const rows = await handle.sql<{ daily_cost_minor_units: string | null }[]>`
+      select daily_cost_minor_units from resources where id = ${geraet.id}
+    `;
+    expect(rows[0]?.daily_cost_minor_units).toBeNull();
+  });
+
+  it("aktualisiert eine bestehende Ressource ueber ihre ID", async () => {
+    const angelegt = await upsertResource(deps, { kind: "vehicle", name: "Alt" });
+    const geaendert = await upsertResource(deps, { id: angelegt.id, kind: "vehicle", name: "Neu" });
+
+    expect(geaendert.id).toBe(angelegt.id);
+    expect(geaendert.name).toBe("Neu");
+
+    const rows = await handle.sql<
+      { count: string }[]
+    >`select count(*)::text as count from resources`;
+    expect(rows[0]?.count).toBe("1");
+  });
+
+  it("aendert keine Ressource eines FREMDEN Mandanten", async () => {
+    const fremdeOrg = "b0000000-0000-4000-8000-0000000000aa";
+    const fremdeRessource = "b0000000-0000-4000-8000-0000000000dd";
+    await handle.sql`insert into organizations (id, name, time_zone) values (${fremdeOrg}, 'Fremdbetrieb', 'Europe/Berlin')`;
+    await handle.sql`insert into resources (id, org_id, kind, name) values (${fremdeRessource}, ${fremdeOrg}, 'machine', 'Fremdgeraet')`;
+
+    await expect(
+      upsertResource(deps, { id: fremdeRessource, kind: "machine", name: "Uebergriff" }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    const rows = await handle.sql<
+      { name: string }[]
+    >`select name from resources where id = ${fremdeRessource}`;
+    expect(rows[0]?.name).toBe("Fremdgeraet");
+  });
+
+  it("nimmt kein orgId aus der Eingabe entgegen", async () => {
+    const fremd = "b0000000-0000-4000-8000-00000000ffff";
+    const angelegt = await upsertResource(deps, {
+      kind: "equipment",
+      name: "Fremdversuch",
+      orgId: fremd,
+    } as Parameters<typeof upsertResource>[1]);
+
+    const rows = await handle.sql<
+      { org_id: string }[]
+    >`select org_id from resources where id = ${angelegt.id}`;
     expect(rows[0]?.org_id).toBe(tenant.orgId);
   });
 });
