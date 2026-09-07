@@ -1,5 +1,5 @@
 {
-  "id": "de6f6e23-30a2-45ea-a0fa-045a94f85507",
+  "id": "347182cd-3ba2-45fe-b6a8-338f1320aea9",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -79,6 +79,194 @@
           "value": "length(trim(\"customers\".\"name\")) > 0"
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.day_resource_allocations": {
+      "name": "day_resource_allocations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "org_id": {
+          "name": "org_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "configuration_id": {
+          "name": "configuration_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "resource_id": {
+          "name": "resource_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "day_resource_allocations_org_id_organizations_id_fk": {
+          "name": "day_resource_allocations_org_id_organizations_id_fk",
+          "tableFrom": "day_resource_allocations",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "org_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "day_resource_allocations_configuration_id_worksite_day_configurations_id_fk": {
+          "name": "day_resource_allocations_configuration_id_worksite_day_configurations_id_fk",
+          "tableFrom": "day_resource_allocations",
+          "tableTo": "worksite_day_configurations",
+          "columnsFrom": [
+            "configuration_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "day_resource_allocations_resource_id_resources_id_fk": {
+          "name": "day_resource_allocations_resource_id_resources_id_fk",
+          "tableFrom": "day_resource_allocations",
+          "tableTo": "resources",
+          "columnsFrom": [
+            "resource_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "day_resource_allocations_unique": {
+          "name": "day_resource_allocations_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "configuration_id",
+            "resource_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.day_team_members": {
+      "name": "day_team_members",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "org_id": {
+          "name": "org_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "configuration_id": {
+          "name": "configuration_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "employee_id": {
+          "name": "employee_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "day_team_members_org_id_organizations_id_fk": {
+          "name": "day_team_members_org_id_organizations_id_fk",
+          "tableFrom": "day_team_members",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "org_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "day_team_members_configuration_id_worksite_day_configurations_id_fk": {
+          "name": "day_team_members_configuration_id_worksite_day_configurations_id_fk",
+          "tableFrom": "day_team_members",
+          "tableTo": "worksite_day_configurations",
+          "columnsFrom": [
+            "configuration_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "day_team_members_employee_id_employees_id_fk": {
+          "name": "day_team_members_employee_id_employees_id_fk",
+          "tableFrom": "day_team_members",
+          "tableTo": "employees",
+          "columnsFrom": [
+            "employee_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "day_team_members_unique": {
+          "name": "day_team_members_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "configuration_id",
+            "employee_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.employees": {
@@ -171,6 +359,154 @@
         "employees_daily_cost_non_negative": {
           "name": "employees_daily_cost_non_negative",
           "value": "\"employees\".\"daily_cost_minor_units\" is null or \"employees\".\"daily_cost_minor_units\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.engagements": {
+      "name": "engagements",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "org_id": {
+          "name": "org_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "worksite_id": {
+          "name": "worksite_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "start_date": {
+          "name": "start_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "end_date": {
+          "name": "end_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "planning_horizon_date": {
+          "name": "planning_horizon_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "colour_key": {
+          "name": "colour_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "planned_start_time": {
+          "name": "planned_start_time",
+          "type": "time",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "planned_end_time": {
+          "name": "planned_end_time",
+          "type": "time",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "initial_configuration": {
+          "name": "initial_configuration",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "engagements_org_id_organizations_id_fk": {
+          "name": "engagements_org_id_organizations_id_fk",
+          "tableFrom": "engagements",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "org_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "engagements_worksite_id_worksites_id_fk": {
+          "name": "engagements_worksite_id_worksites_id_fk",
+          "tableFrom": "engagements",
+          "tableTo": "worksites",
+          "columnsFrom": [
+            "worksite_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "engagements_title_not_blank": {
+          "name": "engagements_title_not_blank",
+          "value": "length(trim(\"engagements\".\"title\")) > 0"
+        },
+        "engagements_end_not_before_start": {
+          "name": "engagements_end_not_before_start",
+          "value": "\"engagements\".\"end_date\" is null or \"engagements\".\"end_date\" >= \"engagements\".\"start_date\""
+        },
+        "engagements_horizon_required_when_open": {
+          "name": "engagements_horizon_required_when_open",
+          "value": "\"engagements\".\"end_date\" is not null or \"engagements\".\"planning_horizon_date\" is not null"
+        },
+        "engagements_horizon_not_before_start": {
+          "name": "engagements_horizon_not_before_start",
+          "value": "\"engagements\".\"planning_horizon_date\" is null or \"engagements\".\"planning_horizon_date\" >= \"engagements\".\"start_date\""
+        },
+        "engagements_colour_key_known": {
+          "name": "engagements_colour_key_known",
+          "value": "\"engagements\".\"colour_key\" in ('moos', 'ocker', 'himmel', 'ton', 'pflaume', 'petrol', 'schiefer', 'rose')"
         }
       },
       "isRLSEnabled": false
@@ -317,6 +653,259 @@
           "value": "\"resources\".\"daily_cost_minor_units\" is null or \"resources\".\"daily_cost_minor_units\" >= 0"
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.worksite_day_configurations": {
+      "name": "worksite_day_configurations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "org_id": {
+          "name": "org_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "worksite_day_id": {
+          "name": "worksite_day_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revision_no": {
+          "name": "revision_no",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "origin": {
+          "name": "origin",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "planned_start_time": {
+          "name": "planned_start_time",
+          "type": "time",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "planned_end_time": {
+          "name": "planned_end_time",
+          "type": "time",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "superseded_at": {
+          "name": "superseded_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "correlation_id": {
+          "name": "correlation_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "worksite_day_configurations_one_current": {
+          "name": "worksite_day_configurations_one_current",
+          "columns": [
+            {
+              "expression": "worksite_day_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"worksite_day_configurations\".\"superseded_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "worksite_day_configurations_org_id_organizations_id_fk": {
+          "name": "worksite_day_configurations_org_id_organizations_id_fk",
+          "tableFrom": "worksite_day_configurations",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "org_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "worksite_day_configurations_worksite_day_id_worksite_days_id_fk": {
+          "name": "worksite_day_configurations_worksite_day_id_worksite_days_id_fk",
+          "tableFrom": "worksite_day_configurations",
+          "tableTo": "worksite_days",
+          "columnsFrom": [
+            "worksite_day_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "worksite_day_configurations_day_revision": {
+          "name": "worksite_day_configurations_day_revision",
+          "nullsNotDistinct": false,
+          "columns": [
+            "worksite_day_id",
+            "revision_no"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "worksite_day_configurations_revision_positive": {
+          "name": "worksite_day_configurations_revision_positive",
+          "value": "\"worksite_day_configurations\".\"revision_no\" >= 1"
+        },
+        "worksite_day_configurations_origin_known": {
+          "name": "worksite_day_configurations_origin_known",
+          "value": "\"worksite_day_configurations\".\"origin\" in ('materialized', 'day_edit', 'series_edit')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.worksite_days": {
+      "name": "worksite_days",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "org_id": {
+          "name": "org_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "worksite_id": {
+          "name": "worksite_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "engagement_id": {
+          "name": "engagement_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "local_date": {
+          "name": "local_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "worksite_days_org_id_organizations_id_fk": {
+          "name": "worksite_days_org_id_organizations_id_fk",
+          "tableFrom": "worksite_days",
+          "tableTo": "organizations",
+          "columnsFrom": [
+            "org_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "worksite_days_worksite_id_worksites_id_fk": {
+          "name": "worksite_days_worksite_id_worksites_id_fk",
+          "tableFrom": "worksite_days",
+          "tableTo": "worksites",
+          "columnsFrom": [
+            "worksite_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "worksite_days_engagement_id_engagements_id_fk": {
+          "name": "worksite_days_engagement_id_engagements_id_fk",
+          "tableFrom": "worksite_days",
+          "tableTo": "engagements",
+          "columnsFrom": [
+            "engagement_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "worksite_days_org_worksite_date": {
+          "name": "worksite_days_org_worksite_date",
+          "nullsNotDistinct": false,
+          "columns": [
+            "org_id",
+            "worksite_id",
+            "local_date"
+          ]
+        },
+        "worksite_days_org_engagement_date": {
+          "name": "worksite_days_org_engagement_date",
+          "nullsNotDistinct": false,
+          "columns": [
+            "org_id",
+            "engagement_id",
+            "local_date"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.worksites": {
