@@ -5,6 +5,12 @@ import { parseLocalDate, type LocalDate } from "../../domain/local-date";
 import { DomainRuleError } from "../../domain/workday-derivation";
 import { CreateEngagementCommand, type EngagementCreated } from "../../contracts/engagement";
 import { recordAudit } from "../audit/audit-log";
+import {
+  fingerprintOf,
+  findIdempotencyRecord,
+  lockIdempotencyKey,
+  rememberIdempotencyRecord,
+} from "../idempotency/idempotency-store";
 import type { Clock } from "../clock/clock";
 import { withTransaction, type Transaction } from "../db/client";
 import {
@@ -29,6 +35,13 @@ export interface CreateEngagementHooks {
   readonly afterDaysInserted?: () => Promise<void>;
 }
 
+export interface CreateEngagementOptions extends CreateEngagementHooks {
+  /** Ohne Key wird nichts gespeichert und jeder Aufruf legt neu an. */
+  readonly idempotencyKey?: string;
+}
+
+const OPERATION = "create_engagement";
+
 /**
  * Erzeugt Einsatz, alle effektiven Baustellentage und je Tag die Revision 1 -
  * in EINER Transaktion. Es gibt keinen Zwischenzustand, in dem ein Einsatz
@@ -37,7 +50,7 @@ export interface CreateEngagementHooks {
 export async function createEngagement(
   deps: CreateEngagementDeps,
   input: unknown,
-  hooks?: CreateEngagementHooks,
+  options?: CreateEngagementOptions,
 ): Promise<EngagementCreated> {
   const command = parseInput(CreateEngagementCommand, input);
   const today = deps.clock.todayLocal(deps.tenant.timeZone);
@@ -64,9 +77,34 @@ export async function createEngagement(
     );
   }
 
-  return withTransaction(deps.db, (tx) =>
-    materialise(tx, deps, command, period.effectiveDays, hooks),
-  );
+  return withTransaction(deps.db, async (tx) => {
+    if (options?.idempotencyKey === undefined) {
+      return materialise(tx, deps, command, period.effectiveDays, options);
+    }
+
+    // Reihenfolge: erst sperren, dann nachsehen. Andersherum koennten zwei
+    // gleichzeitige Anfragen beide "nichts gefunden" sehen und doppelt anlegen.
+    await lockIdempotencyKey(tx, OPERATION, options.idempotencyKey);
+
+    const ref = {
+      orgId: deps.tenant.orgId,
+      operation: OPERATION,
+      key: options.idempotencyKey,
+      fingerprint: fingerprintOf(command),
+    };
+
+    const gespeichert = await findIdempotencyRecord(tx, ref);
+
+    if (gespeichert !== null) {
+      return gespeichert.body as EngagementCreated;
+    }
+
+    const ergebnis = await materialise(tx, deps, command, period.effectiveDays, options);
+
+    await rememberIdempotencyRecord(tx, { ...ref, status: 201, body: ergebnis });
+
+    return ergebnis;
+  });
 }
 
 async function materialise(
@@ -181,7 +219,7 @@ async function materialise(
   await recordAudit(tx, {
     orgId: deps.tenant.orgId,
     actor: deps.tenant.actor,
-    operation: "create_engagement",
+    operation: OPERATION,
     subjectId: engagementId,
     payload: { title: command.title, dayCount: dayRows.length },
     correlationId: deps.correlationId,

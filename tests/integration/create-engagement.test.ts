@@ -279,4 +279,84 @@ describe("create-engagement", () => {
     >`select count(*)::text as count from worksite_days`;
     expect(zeilen[0]?.count).toBe("20");
   });
+
+  it("liefert bei gleichem Key und gleichem Payload dieselbe Antwort ohne Doppelwirkung", async () => {
+    const eingabe = basis();
+
+    const erste = await createEngagement(deps, eingabe, { idempotencyKey: "key-1" });
+    const zweite = await createEngagement(deps, eingabe, { idempotencyKey: "key-1" });
+
+    // Identische Antwort, nicht nur "auch erfolgreich".
+    expect(zweite).toEqual(erste);
+
+    const eins = await handle.sql<
+      { count: string }[]
+    >`select count(*)::text as count from engagements`;
+    const tage = await handle.sql<
+      { count: string }[]
+    >`select count(*)::text as count from worksite_days`;
+    expect(eins[0]?.count).toBe("1");
+    expect(tage[0]?.count).toBe("10");
+  });
+
+  it("meldet bei gleichem Key und anderem Payload einen Konflikt ohne Mutation", async () => {
+    await createEngagement(deps, basis(), { idempotencyKey: "key-1" });
+
+    await expect(
+      createEngagement(deps, { ...basis(), title: "Anderer Titel" }, { idempotencyKey: "key-1" }),
+    ).rejects.toMatchObject({ code: "IDEMPOTENCY_KEY_REUSED" });
+
+    const eins = await handle.sql<
+      { count: string }[]
+    >`select count(*)::text as count from engagements`;
+    const titel = await handle.sql<{ title: string }[]>`select title from engagements`;
+    expect(eins[0]?.count).toBe("1");
+    expect(titel[0]?.title).toBe("Rueckschnitt");
+  });
+
+  it("trennt verschiedene Keys voneinander", async () => {
+    await createEngagement(deps, basis(), { idempotencyKey: "key-1" });
+    await createEngagement(
+      deps,
+      { ...basis(), worksiteId: worksiteB },
+      { idempotencyKey: "key-2" },
+    );
+
+    const eins = await handle.sql<
+      { count: string }[]
+    >`select count(*)::text as count from engagements`;
+    expect(eins[0]?.count).toBe("2");
+  });
+
+  it("legt ohne Key weiterhin an, speichert dann aber keinen Idempotenz-Eintrag", async () => {
+    await createEngagement(deps, basis());
+
+    const eintraege = await handle.sql<
+      { count: string }[]
+    >`select count(*)::text as count from idempotency_records`;
+    expect(eintraege[0]?.count).toBe("0");
+  });
+
+  it("legt bei ZWEI GLEICHZEITIGEN Anfragen mit demselben Key nur einmal an", async () => {
+    const eingabe = basis();
+
+    // Beide Aufrufe starten, bevor einer fertig ist. Nur wenn zuerst gesperrt
+    // und dann nachgesehen wird, sieht der zweite die Erstantwort. In der
+    // umgekehrten Reihenfolge finden beide "nichts" und legen doppelt an.
+    const [a, b] = await Promise.all([
+      createEngagement(deps, eingabe, { idempotencyKey: "key-parallel" }),
+      createEngagement(deps, eingabe, { idempotencyKey: "key-parallel" }),
+    ]);
+
+    expect(a).toEqual(b);
+
+    const eins = await handle.sql<
+      { count: string }[]
+    >`select count(*)::text as count from engagements`;
+    const tage = await handle.sql<
+      { count: string }[]
+    >`select count(*)::text as count from worksite_days`;
+    expect(eins[0]?.count).toBe("1");
+    expect(tage[0]?.count).toBe("10");
+  });
 });
