@@ -22,11 +22,14 @@ export const MAX_DAYS_PER_MATERIALISATION = 366;
  */
 export class DomainRuleError extends Error {
   readonly code: ProblemCode;
+  /** Zusatzangaben fuer das Problem-JSON, z. B. die Konflikttage. */
+  readonly meta?: Record<string, unknown>;
 
-  constructor(code: ProblemCode, detail: string) {
+  constructor(code: ProblemCode, detail: string, meta?: Record<string, unknown>) {
     super(detail);
     this.name = "DomainRuleError";
     this.code = code;
+    this.meta = meta;
   }
 }
 
