@@ -147,4 +147,66 @@ describe("create-engagement", () => {
     expect(rows[0]?.payload.dayCount).toBe(10);
     expect(result.worksiteDayIds).toHaveLength(10);
   });
+
+  it("lehnt einen Start in der Vergangenheit ab und legt KEINE Zeile an", async () => {
+    // Uhr steht auf 2026-09-07; der 06.09. liegt davor.
+    await expect(
+      createEngagement(deps, { ...basis(), startDate: "2026-09-06" }),
+    ).rejects.toMatchObject({ code: "ENGAGEMENT_START_IN_PAST" });
+
+    const engagements = await handle.sql<
+      { count: string }[]
+    >`select count(*)::text as count from engagements`;
+    const tage = await handle.sql<
+      { count: string }[]
+    >`select count(*)::text as count from worksite_days`;
+    expect(engagements[0]?.count).toBe("0");
+    expect(tage[0]?.count).toBe("0");
+  });
+
+  it("erlaubt einen Start am heutigen Tag", async () => {
+    const result = await createEngagement(deps, { ...basis(), startDate: "2026-09-07" });
+    expect(result.localDates[0]).toBe("2026-09-07");
+  });
+
+  it("rollt bei einem Fehler NACH dem Tageseinfuegen alles zurueck", async () => {
+    await expect(
+      createEngagement(deps, basis(), {
+        afterDaysInserted: async () => {
+          throw new Error("Fehlerinjektion nach dem Tageseinfuegen");
+        },
+      }),
+    ).rejects.toThrow("Fehlerinjektion nach dem Tageseinfuegen");
+
+    // Der eigentliche Beweis: KEINE Teilwirkung in irgendeiner der drei Tabellen.
+    const zeilen = await handle.sql<
+      { engagements: string; tage: string; konfigurationen: string; team: string }[]
+    >`
+      select
+        (select count(*) from engagements)::text as engagements,
+        (select count(*) from worksite_days)::text as tage,
+        (select count(*) from worksite_day_configurations)::text as konfigurationen,
+        (select count(*) from day_team_members)::text as team
+    `;
+
+    expect(zeilen[0]).toEqual({ engagements: "0", tage: "0", konfigurationen: "0", team: "0" });
+  });
+
+  it("laesst nach einem gescheiterten Versuch einen erneuten Anlauf zu", async () => {
+    await expect(
+      createEngagement(deps, basis(), {
+        afterDaysInserted: async () => {
+          throw new Error("Abbruch");
+        },
+      }),
+    ).rejects.toThrow("Abbruch");
+
+    const result = await createEngagement(deps, basis());
+
+    expect(result.worksiteDayIds).toHaveLength(10);
+    const zeilen = await handle.sql<
+      { count: string }[]
+    >`select count(*)::text as count from engagements`;
+    expect(zeilen[0]?.count).toBe("1");
+  });
 });
