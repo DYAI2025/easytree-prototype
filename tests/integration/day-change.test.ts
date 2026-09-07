@@ -4,6 +4,7 @@ import { fixedClock } from "../../src/server/clock/clock";
 import { createCustomer } from "../../src/server/commands/create-customer";
 import { createEngagement } from "../../src/server/commands/create-engagement";
 import { createWorksite } from "../../src/server/commands/create-worksite";
+import { applySeriesChange } from "../../src/server/commands/apply-series-change";
 import { previewSeriesChange } from "../../src/server/commands/preview-series-change";
 import { updateWorksiteDay } from "../../src/server/commands/update-worksite-day";
 import { upsertEmployee } from "../../src/server/commands/upsert-employee";
@@ -251,5 +252,135 @@ describe("day-change", () => {
     expect(vorschau.rows.find((r) => r.date === "2026-09-14")?.status).toBe("past_locked");
     expect(vorschau.rows.find((r) => r.date === "2026-09-15")?.status).toBe("past_locked");
     expect(vorschau.targetIds).not.toContain(tagVom("2026-09-14"));
+  });
+
+  it("aendert angepasste Folgetage NICHT still mit", async () => {
+    // 2026-09-15 wird zuerst einzeln geaendert -> Revision 2, origin day_edit.
+    await updateWorksiteDay(deps, {
+      worksiteDayId: tagVom("2026-09-15"),
+      scope: "ONLY_THIS_DAY",
+      expectedRevisionNo: 1,
+      changes: { note: "Individuell" },
+    });
+
+    const result = await applySeriesChange(deps, {
+      worksiteDayId: tagVom("2026-09-10"),
+      scope: "THIS_AND_FOLLOWING",
+      expectedRevisionNo: 1,
+      changes: { employeeIds: [anna, bernd], note: "Serie" },
+      includeAdjustedDayIds: [],
+    });
+
+    expect(result.updatedDayIds).toHaveLength(6);
+    expect(result.updatedDayIds).not.toContain(tagVom("2026-09-15"));
+
+    const alle = await revisionen();
+
+    // Der angepasste Tag behaelt seine Revision 2 und seine Notiz.
+    const angepasst = alle.filter((r) => r.local_date === "2026-09-15");
+    expect(angepasst).toHaveLength(2);
+    expect(angepasst.at(-1)?.revision_no).toBe(2);
+    expect(angepasst.at(-1)?.origin).toBe("day_edit");
+
+    // Die uebrigen Zieltage haben eine neue Revision mit origin series_edit.
+    for (const datum of [
+      "2026-09-10",
+      "2026-09-11",
+      "2026-09-14",
+      "2026-09-16",
+      "2026-09-17",
+      "2026-09-18",
+    ]) {
+      const aktuell = alle.filter((r) => r.local_date === datum && r.superseded_at === null);
+      expect(aktuell[0]?.revision_no).toBe(2);
+      expect(aktuell[0]?.origin).toBe("series_edit");
+    }
+
+    // Tage VOR dem Startpunkt bleiben unberuehrt.
+    for (const datum of ["2026-09-07", "2026-09-08", "2026-09-09"]) {
+      const aktuell = alle.filter((r) => r.local_date === datum);
+      expect(aktuell).toHaveLength(1);
+      expect(aktuell[0]?.origin).toBe("materialized");
+    }
+  });
+
+  it("bezieht einen angepassten Tag nach ausdruecklicher Auswahl ein", async () => {
+    await updateWorksiteDay(deps, {
+      worksiteDayId: tagVom("2026-09-15"),
+      scope: "ONLY_THIS_DAY",
+      expectedRevisionNo: 1,
+      changes: { note: "Individuell" },
+    });
+
+    const result = await applySeriesChange(deps, {
+      worksiteDayId: tagVom("2026-09-10"),
+      scope: "THIS_AND_FOLLOWING",
+      expectedRevisionNo: 1,
+      changes: { note: "Serie" },
+      includeAdjustedDayIds: [tagVom("2026-09-15")],
+    });
+
+    expect(result.updatedDayIds).toHaveLength(7);
+    expect(result.updatedDayIds).toContain(tagVom("2026-09-15"));
+
+    const alle = await revisionen();
+    const angepasst = alle.filter((r) => r.local_date === "2026-09-15" && r.superseded_at === null);
+    expect(angepasst[0]?.revision_no).toBe(3);
+    expect(angepasst[0]?.origin).toBe("series_edit");
+  });
+
+  it("aendert bei einem Fehler an einem Zieltag KEINEN einzigen Tag", async () => {
+    await expect(
+      applySeriesChange(
+        deps,
+        {
+          worksiteDayId: tagVom("2026-09-10"),
+          scope: "THIS_AND_FOLLOWING",
+          expectedRevisionNo: 1,
+          changes: { note: "Serie" },
+          includeAdjustedDayIds: [],
+        },
+        {
+          beforeDay: async (_id, index) => {
+            if (index === 4) {
+              throw new Error("Fehlerinjektion beim fuenften Zieltag");
+            }
+          },
+        },
+      ),
+    ).rejects.toThrow("Fehlerinjektion beim fuenften Zieltag");
+
+    // Transaktionsbeweis: weiterhin genau 10 Konfigurationen, alle Revision 1.
+    const alle = await revisionen();
+    expect(alle).toHaveLength(10);
+    expect(alle.every((r) => r.revision_no === 1)).toBe(true);
+    expect(alle.every((r) => r.origin === "materialized")).toBe(true);
+    expect(alle.every((r) => r.superseded_at === null)).toBe(true);
+  });
+
+  it("schreibt einen Audit-Eintrag mit den ausgeschlossenen Tagen", async () => {
+    await updateWorksiteDay(deps, {
+      worksiteDayId: tagVom("2026-09-15"),
+      scope: "ONLY_THIS_DAY",
+      expectedRevisionNo: 1,
+      changes: { note: "Individuell" },
+    });
+
+    await applySeriesChange(deps, {
+      worksiteDayId: tagVom("2026-09-10"),
+      scope: "THIS_AND_FOLLOWING",
+      expectedRevisionNo: 1,
+      changes: { note: "Serie" },
+      includeAdjustedDayIds: [],
+    });
+
+    const rows = await handle.sql<
+      { payload: { changedCount: number; excludedAdjusted: string[] } }[]
+    >`
+      select payload from audit_events where operation = 'apply_series_change'
+    `;
+
+    expect(rows[0]?.payload.changedCount).toBe(6);
+    expect(rows[0]?.payload.excludedAdjusted).toEqual(["2026-09-15"]);
   });
 });
