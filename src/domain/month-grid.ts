@@ -49,6 +49,23 @@ export interface SpanSegment {
 }
 
 /**
+ * Verschiebt einen Kalendermonat um ganze Monate. Rechnet ueber Jahresgrenzen
+ * hinweg, ohne den Umweg ueber ein Datum - ein Monat hat keinen Tag, und
+ * "31. Januar plus ein Monat" waere eine andere, mehrdeutige Frage.
+ */
+export function addMonths(month: LocalMonth | string, delta: number): LocalMonth {
+  const value = parseLocalMonth(month);
+  const jahr = Number(value.slice(0, 4));
+  const monat = Number(value.slice(5, 7));
+  const gesamt = jahr * 12 + (monat - 1) + delta;
+
+  const neuesJahr = Math.floor(gesamt / 12);
+  const neuerMonat = gesamt - neuesJahr * 12 + 1;
+
+  return `${String(neuesJahr).padStart(4, "0")}-${String(neuerMonat).padStart(2, "0")}` as LocalMonth;
+}
+
+/**
  * Montagsbeginnendes Monatsraster aus vollen Wochen (5 oder 6 Zeilen).
  *
  * Es werden immer volle Wochen gerendert, damit die Zeilen gleich breit sind

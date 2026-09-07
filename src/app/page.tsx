@@ -1,8 +1,12 @@
+import { redirect } from "next/navigation";
+
+import { serverClock } from "../server/clock/clock";
+import { resolveTenant } from "../server/tenant/tenant-context";
+
+/** Der Einstieg ist die Planung, nicht die Kostenansicht (PRD 11/12). */
 export default function HomePage() {
-  return (
-    <>
-      <h1 className="text-2xl font-semibold">EasyTree Prototyp</h1>
-      <p className="mt-2 text-ink-muted">Platzhalter. Die Planungsansicht entsteht in TASK-030.</p>
-    </>
-  );
+  const tenant = resolveTenant();
+  const monat = serverClock().todayLocal(tenant.timeZone).slice(0, 7);
+
+  redirect(`/planung?monat=${monat}`);
 }
