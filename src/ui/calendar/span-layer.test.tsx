@@ -78,3 +78,34 @@ describe("SpanLayer", () => {
     expect(balken[1]?.getAttribute("data-weiter-links")).toBe("true");
   });
 });
+
+describe("SpanLayer Farbe und Zeilenbasis", () => {
+  it("faerbt den Balken ueber die Palettenvariablen statt ueber eine Klasse", () => {
+    const { container } = render(
+      <SpanLayer segments={segmente} colourByEngagement={{ "eng-1": "moos" }} />,
+    );
+    const balken = container.querySelector<HTMLElement>('[data-testid="span-segment"]')!;
+
+    // Eine zur Laufzeit zusammengebaute Tailwind-Klasse wie `bg-moos-frame`
+    // wird nie erzeugt - der Balken waere unsichtbar.
+    expect(balken.className).not.toContain("moos");
+    expect(balken.style.backgroundColor).toBe("var(--eyt-colour-moos-frame)");
+  });
+
+  it("verschiebt die Gitterzeile um rowBase, damit ein Segment in seine Wochenzeile passt", () => {
+    const zweiteZeile = segmente.filter((s) => s.rowIndex === 2);
+
+    expect(zweiteZeile).toHaveLength(1);
+
+    const { container } = render(
+      <SpanLayer segments={zweiteZeile} colourByEngagement={{ "eng-1": "moos" }} rowBase={2} />,
+    );
+    const balken = container.querySelector<HTMLElement>('[data-testid="span-segment"]')!;
+
+    // Ohne rowBase landete das Segment in Gitterzeile 3 einer Zeile, die nur
+    // eine hat - es wuerde zwei leere Zeilen erzeugen und alles verschieben.
+    expect(balken.style.gridRowStart).toBe("1");
+    // Die echte Zeilennummer bleibt als Information erhalten.
+    expect(balken.getAttribute("data-zeile")).toBe("2");
+  });
+});

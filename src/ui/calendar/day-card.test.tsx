@@ -121,3 +121,28 @@ describe("DayCardStack", () => {
     expect(container.querySelector('[data-testid="mehr-karten"]')).toBeNull();
   });
 });
+
+describe("DayCard Farbmarker", () => {
+  it("faerbt den Marker ueber die Palettenvariable statt ueber eine gebaute Klasse", () => {
+    const { container } = render(
+      <DayCard
+        card={{
+          worksiteDayId: "wd-1",
+          engagementId: "eng-1",
+          title: "Baumpflege",
+          worksiteName: "Nordring",
+          colourKey: "petrol",
+          employeeCount: 3,
+          resourceCount: 2,
+        }}
+        onOpen={() => {}}
+      />,
+    );
+    const marker = container.querySelector<HTMLElement>('[data-testid="farbmarker"]')!;
+
+    // `bg-${key}-frame` existiert als Tailwind-Klasse nicht: Tailwind liest
+    // Klassennamen statisch aus dem Quelltext und sieht diese nie.
+    expect(marker.className).not.toContain("petrol");
+    expect(marker.style.backgroundColor).toBe("var(--eyt-colour-petrol-frame)");
+  });
+});

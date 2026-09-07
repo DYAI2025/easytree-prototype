@@ -3,7 +3,8 @@
 import { useCallback, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 import type { LocalDate } from "../../domain/local-date";
-import type { MonthGrid as MonthGridModel } from "../../domain/month-grid";
+import type { MonthGrid as MonthGridModel, SpanSegment } from "../../domain/month-grid";
+import { SpanLayer } from "./span-layer";
 import { tagesLabel, WOCHENTAGE, WOCHENTAGE_LANG } from "./date-labels";
 
 export interface MonthGridProps {
@@ -15,6 +16,9 @@ export interface MonthGridProps {
   readonly onMonthChange: (richtung: -1 | 1) => void;
   readonly cardsByDate?: Readonly<Record<string, ReactNode>>;
   readonly countsByDate?: Readonly<Record<string, number>>;
+  /** Balken der mehrtaegigen Einsaetze; rein dekorativ (siehe SpanLayer). */
+  readonly spans?: readonly SpanSegment[];
+  readonly colourByEngagement?: Readonly<Record<string, string>>;
 }
 
 const TAGE_PRO_WOCHE = 7;
@@ -38,6 +42,8 @@ export function MonthGrid({
   onMonthChange,
   cardsByDate,
   countsByDate,
+  spans,
+  colourByEngagement,
 }: MonthGridProps) {
   const flach = useMemo(
     () => grid.weeks.flatMap((week) => week.days.map((day) => day.date)),
@@ -147,17 +153,33 @@ export function MonthGrid({
         ))}
       </div>
 
-      {grid.weeks.map((week) => (
+      {grid.weeks.map((week, zeilenIndex) => (
         <div key={week.isoWeek} role="row" className="grid grid-cols-[3rem_repeat(7,1fr)]">
+          {/*
+            Die Balken liegen IN der Wochenzeile, nicht in einer eigenen
+            Overlay-Ebene: eine zweite absolute Ebene muesste die Zeilenhoehen
+            des Rasters nachbauen und liefe bei jeder Aenderung auseinander.
+          */}
+          {spans !== undefined && colourByEngagement !== undefined && (
+            <SpanLayer
+              segments={spans.filter((segment) => segment.rowIndex === zeilenIndex)}
+              colourByEngagement={colourByEngagement}
+              rowBase={zeilenIndex}
+            />
+          )}
           <div
             role="rowheader"
             aria-label={`Kalenderwoche ${week.isoWeek}`}
+            // Explizit platziert wie die Tageszellen: die Balken belegen
+            // Zellen derselben Gitterzeile, und automatisch platzierte
+            // Elemente wuerden um sie herum in freie Spalten rutschen.
+            style={{ gridColumn: 1, gridRow: 1 }}
             className="p-2 text-sm text-ink-muted"
           >
             {week.isoWeek}
           </div>
 
-          {week.days.map((day) => {
+          {week.days.map((day, spaltenIndex) => {
             const anzahl = countsByDate?.[day.date] ?? 0;
 
             return (
@@ -172,6 +194,7 @@ export function MonthGrid({
                 data-ausserhalb={day.inMonth ? undefined : "true"}
                 aria-label={tagesLabel(day.date, anzahl)}
                 aria-current={day.date === today ? "date" : undefined}
+                style={{ gridColumn: spaltenIndex + 2, gridRow: 1 }}
                 onKeyDown={(event) => handleKey(event, day.date)}
                 onFocus={() => setAktiv(day.date)}
                 className={[

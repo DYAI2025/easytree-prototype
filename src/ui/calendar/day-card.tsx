@@ -51,7 +51,10 @@ export function DayCard({
       <span
         data-testid="farbmarker"
         aria-hidden="true"
-        className={`w-1 shrink-0 rounded-l bg-${card.colourKey}-frame`}
+        // Variable statt `bg-${key}-frame`: Tailwind erzeugt zur Laufzeit
+        // zusammengesetzte Klassennamen nicht, der Marker bliebe farblos.
+        style={{ backgroundColor: `var(--eyt-colour-${card.colourKey}-frame)` }}
+        className="w-1 shrink-0 rounded-l"
       />
       <span className="min-w-0 flex-1 p-1">
         <span data-truncate="true" className="block truncate font-medium">

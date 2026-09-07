@@ -24,6 +24,10 @@ const FIXED_TODAY = process.env.EASYTREE_FIXED_TODAY ?? "2026-09-01";
 export default defineConfig({
   testDir: "./e2e",
 
+  // EINMAL je Lauf zuruecksetzen und seeden - nicht je Spec-Datei, sonst
+  // loeschen sich die Specs gegenseitig die Daten.
+  globalSetup: "./e2e/fixtures/seed-helper.ts",
+
   fullyParallel: false,
   workers: 1,
 
@@ -55,7 +59,11 @@ export default defineConfig({
     ? undefined
     : {
         command: "pnpm build && pnpm start",
-        url: BASE_URL,
+        // Bewusst /api/health und nicht BASE_URL: die Startseite leitet auf
+        // /planung um, das ein migriertes Schema braucht. Das legt aber erst
+        // globalSetup an - und das laeuft NACH der Readiness-Probe. Die Probe
+        // darf deshalb nur die Verbindung pruefen, nicht die Tabellen.
+        url: `${BASE_URL}/api/health`,
         // Ein Next-Produktionsbuild ueberschreitet die Vorgabe von 60 s deutlich.
         timeout: 300_000,
         // Bewusst IMMER false (Plan sagt !process.env.CI): mit Wiederverwendung

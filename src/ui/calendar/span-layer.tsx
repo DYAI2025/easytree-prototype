@@ -12,29 +12,45 @@ import type { SpanSegment } from "../../domain/month-grid";
 export function SpanLayer({
   segments,
   colourByEngagement,
+  rowBase = 0,
 }: {
   readonly segments: readonly SpanSegment[];
   readonly colourByEngagement: Readonly<Record<string, string>>;
+  /**
+   * Zeilenindex, der auf Gitterzeile 1 abgebildet wird.
+   *
+   * Das Raster rendert jede Woche als eigenes Grid mit genau einer Zeile.
+   * Ohne diese Verschiebung landete ein Segment aus Wochenzeile 2 in
+   * Gitterzeile 3 und erzeugte dort zwei leere Zeilen.
+   */
+  readonly rowBase?: number;
 }) {
   return (
     <>
-      {segments.map((segment) => (
-        <div
-          key={`${segment.engagementId}-${segment.rowIndex}-${segment.startCol}`}
-          data-testid="span-segment"
-          data-zeile={segment.rowIndex}
-          data-farbe={colourByEngagement[segment.engagementId]}
-          data-weiter-links={segment.continuesLeft ? "true" : undefined}
-          data-weiter-rechts={segment.continuesRight ? "true" : undefined}
-          aria-hidden="true"
-          style={{
-            gridColumnStart: segment.startCol + 1,
-            gridColumnEnd: segment.endCol + 2,
-            gridRowStart: segment.rowIndex + 1,
-          }}
-          className="pointer-events-none h-1 self-start rounded"
-        />
-      ))}
+      {segments.map((segment) => {
+        const farbe = colourByEngagement[segment.engagementId];
+
+        return (
+          <div
+            key={`${segment.engagementId}-${segment.rowIndex}-${segment.startCol}`}
+            data-testid="span-segment"
+            data-zeile={segment.rowIndex}
+            data-farbe={farbe}
+            data-weiter-links={segment.continuesLeft ? "true" : undefined}
+            data-weiter-rechts={segment.continuesRight ? "true" : undefined}
+            aria-hidden="true"
+            style={{
+              gridColumnStart: segment.startCol + 1,
+              gridColumnEnd: segment.endCol + 2,
+              gridRowStart: segment.rowIndex - rowBase + 1,
+              // Variable statt Tailwind-Klasse: der Farbschluessel kommt aus
+              // den Daten, eine gebaute Klasse wuerde nie erzeugt.
+              backgroundColor: farbe === undefined ? undefined : `var(--eyt-colour-${farbe}-frame)`,
+            }}
+            className="pointer-events-none mt-7 h-1 self-start rounded"
+          />
+        );
+      })}
     </>
   );
 }

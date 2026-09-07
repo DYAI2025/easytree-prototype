@@ -7,9 +7,10 @@ import type { MonthPlanningViewDto } from "../../contracts/worksite-days";
 import {
   addMonths,
   buildMonthGrid,
+  computeSpanSegments,
   type MonthGrid as MonthGridModel,
 } from "../../domain/month-grid";
-import { parseLocalDate } from "../../domain/local-date";
+import { parseLocalDate, type LocalDate } from "../../domain/local-date";
 import { DayCardStack, type DayCardModel } from "./day-card";
 import { MonthGrid } from "./month-grid";
 import { MonthToolbar } from "./month-toolbar";
@@ -55,6 +56,28 @@ export function PlanungsAnsicht({ view }: { readonly view: MonthPlanningViewDto 
     return { cardsByDate: knoten, countsByDate: zahlen };
   }, [view.cards]);
 
+  // Die Balken kommen aus denselben Karten wie die Tageskarten: ein Einsatz
+  // ist an genau den Tagen geplant, an denen er eine Karte hat.
+  const { spans, colourByEngagement } = useMemo(() => {
+    const tageProEinsatz = new Map<string, LocalDate[]>();
+    const farben: Record<string, string> = {};
+
+    for (const card of view.cards) {
+      const bisher = tageProEinsatz.get(card.engagementId) ?? [];
+
+      bisher.push(parseLocalDate(card.date));
+      tageProEinsatz.set(card.engagementId, bisher);
+      farben[card.engagementId] = card.colourKey;
+    }
+
+    const segmente = computeSpanSegments(
+      grid,
+      [...tageProEinsatz].map(([engagementId, days]) => ({ engagementId, days })),
+    );
+
+    return { spans: segmente, colourByEngagement: farben };
+  }, [grid, view.cards]);
+
   const wechsleMonat = (monat: string) => {
     router.push(`/planung?monat=${monat}`);
   };
@@ -86,6 +109,8 @@ export function PlanungsAnsicht({ view }: { readonly view: MonthPlanningViewDto 
         labelledBy="monatstitel"
         cardsByDate={cardsByDate}
         countsByDate={countsByDate}
+        spans={spans}
+        colourByEngagement={colourByEngagement}
         onCreateForDate={() => {}}
         onMonthChange={(richtung) => wechsleMonat(addMonths(view.month, richtung))}
       />
