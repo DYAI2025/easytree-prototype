@@ -263,7 +263,15 @@ export function StepPeriod({ onNext }: { readonly onNext: (werte: StepPeriodWert
             key={key}
             value={key}
             aria-label={colourFor(key).label}
-            className="flex items-center gap-2 rounded border border-line px-2 py-1 data-[state=checked]:border-action"
+            /*
+             * Auswahl folgt dem Fokus - das verlangt das ARIA-Muster fuer
+             * radiogroup. Radix waehlt beim ERSTEN Pfeildruck nicht mit: der
+             * Fokus sprang auf "Ocker", gewaehlt blieb "Moos" (gemessen in
+             * TASK-048). Wer mit der Tastatur eine Farbe ansteuert und
+             * weitertabbt, haette stumm eine andere Farbe gespeichert.
+             */
+            onFocus={() => setFarbe(key)}
+            className="flex min-h-11 items-center gap-2 rounded border border-line px-2 py-1 data-[state=checked]:border-action"
           >
             <span
               aria-hidden="true"

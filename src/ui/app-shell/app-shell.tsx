@@ -26,12 +26,20 @@ export function AppShell({ children }: { children: ReactNode }) {
       </a>
 
       <header className="border-b border-line bg-surface">
-        <nav aria-label="Hauptnavigation" className="mx-auto flex max-w-6xl gap-1 px-4 py-3">
+        {/*
+         * flex-wrap ist Pflicht, nicht Kosmetik: bei 320 px ragten die vier
+         * Links 145 px ueber den Viewport hinaus und das ganze Dokument
+         * scrollte horizontal (TASK-048, REQ-NF-004).
+         */}
+        <nav
+          aria-label="Hauptnavigation"
+          className="mx-auto flex max-w-6xl flex-wrap gap-1 px-4 py-3"
+        >
           {NAVIGATION.map((entry) => (
             <a
               key={entry.href}
               href={entry.href}
-              className="rounded px-3 py-2 hover:bg-canvas focus-visible:bg-canvas"
+              className="inline-flex min-h-11 items-center rounded px-3 py-2 hover:bg-canvas focus-visible:bg-canvas"
             >
               {entry.label}
             </a>

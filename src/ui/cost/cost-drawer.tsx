@@ -62,15 +62,25 @@ function Betrag({ amountMinorUnits }: { readonly amountMinorUnits: string | null
 
 function Tabelle({
   kopf,
+  beschriftung,
   children,
 }: {
   readonly kopf: readonly string[];
+  /** Name des scrollbaren Bereichs - ohne ihn waere er fuer Screenreader namenlos. */
+  readonly beschriftung: string;
   readonly children: React.ReactNode;
 }) {
   return (
-    // overflow-x-auto liegt auf dem direkten Elternelement der Tabelle: eine
-    // breite Kostentabelle darf scrollen, der Seitenkoerper nicht (REQ-NF-004).
-    <div className="overflow-x-auto">
+    /*
+     * overflow-x-auto liegt auf dem direkten Elternelement der Tabelle: eine
+     * breite Kostentabelle darf scrollen, der Seitenkoerper nicht (REQ-NF-004).
+     *
+     * Ein scrollbarer Bereich MUSS per Tastatur erreichbar sein, sonst kommt
+     * niemand ohne Maus an die rechten Spalten. axe meldete hier
+     * scrollable-region-focusable (serious) - behoben wird der Grund, nicht
+     * die Regel.
+     */
+    <div role="region" aria-label={beschriftung} tabIndex={0} className="overflow-x-auto">
       <table className="w-full border-collapse">
         <thead>
           <tr>
@@ -172,7 +182,10 @@ export function CostDrawer({ engagementId, engagementTitle, onClose }: CostDrawe
             </Tabs.List>
 
             <Tabs.Content value="tag" className="mt-3">
-              <Tabelle kopf={["Datum", "Position", "Betrag", "Zwischensumme"]}>
+              <Tabelle
+                beschriftung="Kosten nach Tag"
+                kopf={["Datum", "Position", "Betrag", "Zwischensumme"]}
+              >
                 {uebersicht.days.flatMap((tag) =>
                   tag.positions.map((position, index) => (
                     <tr key={`${tag.date}-${position.subjectId}`}>
@@ -197,7 +210,10 @@ export function CostDrawer({ engagementId, engagementTitle, onClose }: CostDrawe
             </Tabs.Content>
 
             <Tabs.Content value="mitarbeiter" className="mt-3">
-              <Tabelle kopf={["Mitarbeiter", "Summe", "Fehlende Grundlagen"]}>
+              <Tabelle
+                beschriftung="Kosten nach Mitarbeiter"
+                kopf={["Mitarbeiter", "Summe", "Fehlende Grundlagen"]}
+              >
                 {uebersicht.byEmployee.map((eintrag) => (
                   <tr key={eintrag.subjectId}>
                     <td className="border-b border-line p-2">{eintrag.subjectLabel}</td>
@@ -213,7 +229,10 @@ export function CostDrawer({ engagementId, engagementTitle, onClose }: CostDrawe
             </Tabs.Content>
 
             <Tabs.Content value="ressource" className="mt-3">
-              <Tabelle kopf={["Ressource", "Summe", "Fehlende Grundlagen"]}>
+              <Tabelle
+                beschriftung="Kosten nach Ressource"
+                kopf={["Ressource", "Summe", "Fehlende Grundlagen"]}
+              >
                 {uebersicht.byResource.map((eintrag) => (
                   <tr key={eintrag.subjectId}>
                     <td className="border-b border-line p-2">{eintrag.subjectLabel}</td>

@@ -48,7 +48,9 @@ export function DayCard({
       title={vollText}
       aria-label={vollText}
       onClick={() => onOpen(card.worksiteDayId)}
-      className="flex w-full items-stretch gap-1 rounded border border-line bg-surface text-left text-xs"
+      // min-h-11 = 44 CSS-Pixel (WCAG 2.5.5). Zwei Zeilen text-xs ergaben
+      // 42 px - knapp darunter und damit auf dem Telefon ein Fehlgriff.
+      className="flex min-h-11 w-full items-stretch gap-1 rounded border border-line bg-surface text-left text-xs"
     >
       <span
         data-testid="farbmarker"
@@ -106,7 +108,7 @@ export function DayCardStack({
           data-testid="mehr-karten"
           aria-expanded={aufgeklappt}
           onClick={() => setAufgeklappt((offen) => !offen)}
-          className="rounded border border-line px-1 text-xs text-ink-muted"
+          className="min-h-11 rounded border border-line px-1 text-xs text-ink-muted"
         >
           {aufgeklappt ? "Weniger anzeigen" : `+${versteckt} weitere`}
         </button>

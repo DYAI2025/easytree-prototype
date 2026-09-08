@@ -4,7 +4,10 @@ import type { ButtonHTMLAttributes } from "react";
 import { cn } from "../../lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 rounded px-4 py-2 font-medium disabled:pointer-events-none disabled:opacity-60",
+  // min-h-11/min-w-11 = 44 CSS-Pixel: WCAG 2.5.5. Ohne die Untergrenze war
+  // jeder Knopf 40 px hoch und die Monatspfeile 41 px breit (gemessen bei
+  // 375 px Viewport, TASK-048).
+  "inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded px-4 py-2 font-medium disabled:pointer-events-none disabled:opacity-60",
   {
     variants: {
       variant: {

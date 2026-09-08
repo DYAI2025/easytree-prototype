@@ -143,85 +143,108 @@ export function MonthGrid({
   );
 
   return (
-    <div role="grid" aria-labelledby={labelledBy} className="w-full">
-      <div role="row" className="grid grid-cols-[3rem_repeat(7,1fr)]">
-        <div role="columnheader" aria-label="Kalenderwoche" className="p-2 text-sm text-ink-muted">
-          {/*
+    /*
+     * Der Kalender scrollt in SEINEM Bereich, nicht im Dokument.
+     *
+     * min-w-[27.5rem] haelt eine Tagesspalte bei 56 px; darin bleibt der
+     * Tageskarte nach Rahmen und Innenabstand genau 46 px - ueber der
+     * 44-px-Schwelle aus WCAG 2.5.5. Bei 375 px Viewport passt das Raster
+     * damit nicht mehr in die Breite und scrollt hier horizontal, statt das
+     * ganze Dokument zu verschieben (REQ-NF-004).
+     *
+     * tabIndex + role/aria-label sind Pflicht, nicht Zierde: ein scrollbarer
+     * Bereich ohne Tastaturzugang ist der axe-Verstoss
+     * scrollable-region-focusable.
+     */
+    <div role="region" aria-label="Monatskalender" tabIndex={0} className="overflow-x-auto">
+      <div role="grid" aria-labelledby={labelledBy} className="w-full min-w-[27.5rem]">
+        <div role="row" className="grid grid-cols-[3rem_repeat(7,minmax(0,1fr))]">
+          <div
+            role="columnheader"
+            aria-label="Kalenderwoche"
+            className="p-2 text-sm text-ink-muted"
+          >
+            {/*
             Sichtbarer Text ist Pflicht: eine leere Kopfzelle ist ein echter
             axe-Verstoss (empty-table-header), und ein aria-label allein
             genuegt der Regel nicht. Die Regel abzuschalten waere die falsche
             Reaktion.
           */}
-          KW
-        </div>
-        {WOCHENTAGE.map((kurz, index) => (
-          <div
-            key={kurz}
-            role="columnheader"
-            aria-label={WOCHENTAGE_LANG[index]}
-            className="p-2 text-sm font-medium text-ink-muted"
-          >
-            {kurz}
+            KW
           </div>
-        ))}
-      </div>
+          {WOCHENTAGE.map((kurz, index) => (
+            <div
+              key={kurz}
+              role="columnheader"
+              aria-label={WOCHENTAGE_LANG[index]}
+              className="p-2 text-sm font-medium text-ink-muted"
+            >
+              {kurz}
+            </div>
+          ))}
+        </div>
 
-      {grid.weeks.map((week, zeilenIndex) => (
-        <div key={week.isoWeek} role="row" className="grid grid-cols-[3rem_repeat(7,1fr)]">
-          {/*
+        {grid.weeks.map((week, zeilenIndex) => (
+          <div
+            key={week.isoWeek}
+            role="row"
+            className="grid grid-cols-[3rem_repeat(7,minmax(0,1fr))]"
+          >
+            {/*
             Die Balken liegen IN der Wochenzeile, nicht in einer eigenen
             Overlay-Ebene: eine zweite absolute Ebene muesste die Zeilenhoehen
             des Rasters nachbauen und liefe bei jeder Aenderung auseinander.
           */}
-          {spans !== undefined && colourByEngagement !== undefined && (
-            <SpanLayer
-              segments={spans.filter((segment) => segment.rowIndex === zeilenIndex)}
-              colourByEngagement={colourByEngagement}
-              rowBase={zeilenIndex}
-            />
-          )}
-          <div
-            role="rowheader"
-            aria-label={`Kalenderwoche ${week.isoWeek}`}
-            // Explizit platziert wie die Tageszellen: die Balken belegen
-            // Zellen derselben Gitterzeile, und automatisch platzierte
-            // Elemente wuerden um sie herum in freie Spalten rutschen.
-            style={{ gridColumn: 1, gridRow: 1 }}
-            className="p-2 text-sm text-ink-muted"
-          >
-            {week.isoWeek}
+            {spans !== undefined && colourByEngagement !== undefined && (
+              <SpanLayer
+                segments={spans.filter((segment) => segment.rowIndex === zeilenIndex)}
+                colourByEngagement={colourByEngagement}
+                rowBase={zeilenIndex}
+              />
+            )}
+            <div
+              role="rowheader"
+              aria-label={`Kalenderwoche ${week.isoWeek}`}
+              // Explizit platziert wie die Tageszellen: die Balken belegen
+              // Zellen derselben Gitterzeile, und automatisch platzierte
+              // Elemente wuerden um sie herum in freie Spalten rutschen.
+              style={{ gridColumn: 1, gridRow: 1 }}
+              className="p-2 text-sm text-ink-muted"
+            >
+              {week.isoWeek}
+            </div>
+
+            {week.days.map((day, spaltenIndex) => {
+              const anzahl = countsByDate?.[day.date] ?? 0;
+
+              return (
+                <div
+                  key={day.date}
+                  ref={(node) => {
+                    refs.current.set(day.date, node);
+                  }}
+                  role="gridcell"
+                  tabIndex={day.date === aktiv ? 0 : -1}
+                  data-datum={day.date}
+                  data-ausserhalb={day.inMonth ? undefined : "true"}
+                  aria-label={tagesLabel(day.date, anzahl)}
+                  aria-current={day.date === today ? "date" : undefined}
+                  style={{ gridColumn: spaltenIndex + 2, gridRow: 1 }}
+                  onKeyDown={(event) => handleKey(event, day.date)}
+                  onFocus={() => setAktiv(day.date)}
+                  className={[
+                    "min-h-24 border border-line p-1 text-left align-top",
+                    day.inMonth ? "bg-surface" : "bg-canvas text-ink-muted",
+                  ].join(" ")}
+                >
+                  <span className="text-sm">{Number(day.date.slice(8, 10))}</span>
+                  {cardsByDate?.[day.date]}
+                </div>
+              );
+            })}
           </div>
-
-          {week.days.map((day, spaltenIndex) => {
-            const anzahl = countsByDate?.[day.date] ?? 0;
-
-            return (
-              <div
-                key={day.date}
-                ref={(node) => {
-                  refs.current.set(day.date, node);
-                }}
-                role="gridcell"
-                tabIndex={day.date === aktiv ? 0 : -1}
-                data-datum={day.date}
-                data-ausserhalb={day.inMonth ? undefined : "true"}
-                aria-label={tagesLabel(day.date, anzahl)}
-                aria-current={day.date === today ? "date" : undefined}
-                style={{ gridColumn: spaltenIndex + 2, gridRow: 1 }}
-                onKeyDown={(event) => handleKey(event, day.date)}
-                onFocus={() => setAktiv(day.date)}
-                className={[
-                  "min-h-24 border border-line p-1 text-left align-top",
-                  day.inMonth ? "bg-surface" : "bg-canvas text-ink-muted",
-                ].join(" ")}
-              >
-                <span className="text-sm">{Number(day.date.slice(8, 10))}</span>
-                {cardsByDate?.[day.date]}
-              </div>
-            );
-          })}
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }

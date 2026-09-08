@@ -43,7 +43,10 @@ export function MonthToolbar({
   readonly onCreate: () => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-line pb-3">
+    <div
+      data-testid="monatswerkzeuge"
+      className="flex flex-wrap items-center gap-2 border-b border-line pb-3"
+    >
       <Button
         variant="secondary"
         aria-label="Vorheriger Monat"
