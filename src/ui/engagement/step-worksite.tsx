@@ -12,6 +12,12 @@ import { Button } from "../primitives/button";
 export interface StepWorksiteAuswahl {
   readonly customerId: string;
   readonly worksiteId: string;
+  /**
+   * Der Name reist mit, statt ihn spaeter aus einer Liste nachzuschlagen:
+   * eine inline angelegte Baustelle steht nur in DIESER Komponente, nicht in
+   * den Stammdaten, die der Drawer beim Oeffnen geladen hat.
+   */
+  readonly worksiteName: string;
 }
 
 export interface StepWorksiteProps {
@@ -61,7 +67,11 @@ export function StepWorksite({ customers, worksites, onNext }: StepWorksiteProps
     }
 
     setFehler(null);
-    onNext({ customerId: gewaehlterKunde, worksiteId: gewaehlteBaustelle });
+    onNext({
+      customerId: gewaehlterKunde,
+      worksiteId: gewaehlteBaustelle,
+      worksiteName: baustellen.find((b) => b.id === gewaehlteBaustelle)?.name ?? "",
+    });
   };
 
   const kundeUebernehmen = (neu: Customer): void => {

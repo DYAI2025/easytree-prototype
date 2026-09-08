@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 import type { MonthPlanningViewDto } from "../../contracts/worksite-days";
 import {
@@ -15,6 +15,7 @@ import { DayCardStack, type DayCardModel } from "./day-card";
 import { MonthGrid } from "./month-grid";
 import { MonthToolbar } from "./month-toolbar";
 import { Button } from "../primitives/button";
+import { EngagementDrawer } from "../engagement/engagement-drawer";
 
 /**
  * Client-Teil der Planungsseite.
@@ -25,6 +26,7 @@ import { Button } from "../primitives/button";
  */
 export function PlanungsAnsicht({ view }: { readonly view: MonthPlanningViewDto }) {
   const router = useRouter();
+  const [drawerOffen, setDrawerOffen] = useState(false);
 
   const grid: MonthGridModel = useMemo(() => buildMonthGrid(view.month), [view.month]);
 
@@ -88,7 +90,7 @@ export function PlanungsAnsicht({ view }: { readonly view: MonthPlanningViewDto 
         monat={view.month}
         heute={view.today}
         onNavigate={wechsleMonat}
-        onCreate={() => {}}
+        onCreate={() => setDrawerOffen(true)}
       />
 
       {view.cards.length === 0 && (
@@ -98,7 +100,7 @@ export function PlanungsAnsicht({ view }: { readonly view: MonthPlanningViewDto 
             Lege den ersten Einsatz an oder waehle einen Tag im Kalender.
           </p>
           <div className="mt-3">
-            <Button onClick={() => {}}>Einsatz anlegen</Button>
+            <Button onClick={() => setDrawerOffen(true)}>Einsatz anlegen</Button>
           </div>
         </div>
       )}
@@ -111,9 +113,21 @@ export function PlanungsAnsicht({ view }: { readonly view: MonthPlanningViewDto 
         countsByDate={countsByDate}
         spans={spans}
         colourByEngagement={colourByEngagement}
-        onCreateForDate={() => {}}
+        onCreateForDate={() => setDrawerOffen(true)}
         onMonthChange={(richtung) => wechsleMonat(addMonths(view.month, richtung))}
       />
+
+      {drawerOffen && (
+        <EngagementDrawer
+          onClose={() => setDrawerOffen(false)}
+          onCreated={() => {
+            setDrawerOffen(false);
+            // Die Servertruth hat sich geaendert; ohne refresh zeigte der
+            // Kalender weiter den Stand von vor der Anlage.
+            router.refresh();
+          }}
+        />
+      )}
     </div>
   );
 }

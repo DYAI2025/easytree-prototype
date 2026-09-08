@@ -58,7 +58,11 @@ export function StepTeam({
   const [suche, setSuche] = useState("");
   const [team, setTeam] = useState<readonly string[]>([]);
   const [mittel, setMittel] = useState<readonly string[]>([]);
-  const [fehler, setFehler] = useState<{ text: string; tage: readonly string[] } | null>(null);
+  const [fehler, setFehler] = useState<{
+    text: string;
+    detail?: string;
+    tage: readonly string[];
+  } | null>(null);
   const [laeuft, setLaeuft] = useState(false);
 
   // Ref und nicht nur State: zwei Klicks im selben Tick wuerden denselben
@@ -123,7 +127,11 @@ export function StepTeam({
           : [];
 
       setFehler({
-        text: ursache instanceof Error ? ursache.message : "Anlegen fehlgeschlagen.",
+        text:
+          ursache instanceof ApiProblemError
+            ? ursache.title
+            : "Der Einsatz konnte nicht angelegt werden.",
+        ...(ursache instanceof Error ? { detail: ursache.message } : {}),
         tage,
       });
       // Bewusst freigeben: nach einem Fehler MUSS ein zweiter Versuch moeglich
@@ -203,6 +211,7 @@ export function StepTeam({
       {fehler !== null && (
         <div role="alert" className="rounded border border-line bg-danger-bg p-3 text-danger-text">
           <p className="font-medium">{fehler.text}</p>
+          {fehler.detail !== undefined && <p className="mt-1">{fehler.detail}</p>}
           {fehler.tage.length > 0 && (
             <p className="mt-1">Bereits verplant: {fehler.tage.map(deutschesDatum).join(", ")}</p>
           )}

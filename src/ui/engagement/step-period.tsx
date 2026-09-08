@@ -16,6 +16,8 @@ export interface StepPeriodWerte {
   readonly colourKey: ColourKey;
   readonly addedDays: readonly string[];
   readonly removedDays: readonly string[];
+  /** Die abgeleiteten Tage - der Server rechnet sie neu, die Uebersicht nicht. */
+  readonly localDates: readonly string[];
   readonly plannedStartTime?: string;
   readonly plannedEndTime?: string;
 }
@@ -110,6 +112,7 @@ export function StepPeriod({ onNext }: { readonly onNext: (werte: StepPeriodWert
       colourKey: farbe,
       addedDays: zugewaehlt,
       removedDays: abgewaehlt,
+      localDates: tage,
     };
 
     if (endeOffen) {

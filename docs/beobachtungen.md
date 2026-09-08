@@ -36,3 +36,35 @@ unberuehrt: `IMPLEMENTED_BUT_CONCURRENCY_NOT_VERIFIED`.
 **Naechster Schritt, wenn es wieder auftritt:** waehrend des Laufs
 `pg_stat_activity` und `pg_locks` mitschneiden, um den zweiten Sperrhalter zu
 benennen.
+
+## B-02: Ab der vierten Karte an einem Tag ist die vierte nicht erreichbar (08.09.2026)
+
+**Was:** `DayCardStack` zeigt hoechstens `MAX_VISIBLE_CARDS_PER_DAY = 3` Karten
+und fasst den Rest als Knopf "+n weitere" zusammen. Dieser Knopf hat aktuell
+keinen Handler (`onMore={() => {}}` in `planungs-ansicht.tsx`). Die vierte und
+jede weitere Karte eines Tages steht damit nicht im DOM und ist ueber die
+Oberflaeche nicht erreichbar.
+
+**Wie gefunden:** Der E2E-Lauf zu TASK-037 fand die frisch angelegte Karte am
+21.09.2026 nicht - dort lagen bereits drei. Die Zusicherung wurde deshalb in
+einen leeren Monat verlegt; das umgeht den Befund, es behebt ihn nicht.
+
+**Status:** OFFEN. Eigene Task, bewusst NICHT in TASK-037 miterledigt: einen
+Ueberlauf-Dialog zu bauen ist neue Implementierung, keine Verdrahtungsluecke.
+
+## B-03: AC-05 ist nur zur Haelfte belegt (08.09.2026)
+
+**Was:** Der Plan verlangt fuer AC-05, dass zugeordnete Personen und
+Ressourcen nach `page.reload()` "im Tagesdrawer weiterhin gewaehlt" sind.
+Einen Tagesdrawer gibt es noch nicht (`onOpen` der Tageskarte ist ein
+No-Op).
+
+**Was belegt IST:** Die Persistenz selbst. Nach dem Reload steht "2 Personen /
+2 Ressourcen" auf der Karte, und diese Zahlen kommen aus der Datenbank
+(`monthPlanningView`). Der Test dafuer ist gruen.
+
+**Was NICHT belegt ist:** die Wiederanzeige derselben Auswahl in einem
+Detaildialog. Der Fall steht als `test.fixme` sichtbar offen in
+`e2e/einsatz-anlegen.spec.ts` statt still zu fehlen.
+
+**Status:** OFFEN. Eigene Task.

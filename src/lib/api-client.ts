@@ -10,12 +10,19 @@ import type { ProblemDocument } from "../server/http/problem";
  */
 export class ApiProblemError extends Error {
   readonly code: string;
+  /**
+   * Der Satz fuer den Nutzer. Die Eigenschaft message traegt detail, und das
+   * ist im Zweifel eine Entwicklermeldung mit rohem Fehlercode - gemessen:
+   * "Der Zeitraum ist nicht gueltig: ENGAGEMENT_START_IN_PAST."
+   */
+  readonly title: string;
   readonly status: number;
   readonly meta?: Record<string, unknown>;
 
   constructor(problem: ProblemDocument) {
     super(problem.detail ?? problem.title);
     this.name = "ApiProblemError";
+    this.title = problem.title;
     this.code = problem.type.replace("urn:easytree-prototype:problem:", "");
     this.status = problem.status;
     this.meta = problem.meta;
