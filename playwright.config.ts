@@ -83,6 +83,12 @@ export default defineConfig({
           // `next start` erzwingt NODE_ENV=production. Ab TASK-014 bricht der
           // Start ab, wenn EASYTREE_FIXED_TODAY dort ohne dieses Flag gesetzt ist.
           EASYTREE_PROTOTYPE: "1",
+          // TASK-042: der E2E-Lauf braucht plan- und nachweisbare Kandidaten.
+          // Der Fixture-Adapter ist PROTOTYPE_ONLY und nur mit dem
+          // ausdruecklichen Flag erlaubt - NICHT ueber NODE_ENV, denn
+          // `next start` erzwingt production.
+          GEOCODER_PROVIDER: "fixture",
+          GEOCODER_ALLOW_FIXTURE: "1",
         },
       },
 });

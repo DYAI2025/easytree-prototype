@@ -106,3 +106,22 @@ und Notiz bleiben im Formular.
 Der Einsatz-Drawer (`step-worksite.tsx`, TASK-034) bleibt bewusst unveraendert.
 Er legt Baustellen weiterhin ohne Koordinaten an - das ist der dokumentierte
 Manual-Pfad und nicht Gegenstand von TASK-041/042.
+
+## PA-07: Der im Plan genannte Suchtext existiert im Fixture-Adapter nicht
+
+TASK-042 Schritt 2 nennt „Potsdamer Strasse" als Suchbegriff, der Kandidaten
+liefern soll.
+
+`src/server/geocoding/fixture.adapter.ts` kennt genau drei Schluessel -
+`nordring`, `zeppelinstrasse`, `suedhang` - und liefert fuer jede andere
+Anfrage eine leere Liste. „Potsdamer Strasse" haette also den Nulltreffer-Fall
+geprueft und den Erfolgsfall gerade nicht.
+
+Der Test sucht deshalb nach „Nordring" und erwartet den Kandidaten
+„Nordring 12, 14467 Potsdam". Geprueft wird unveraendert, was der Plan
+verlangt: Auswahl speichert Koordinaten, nach Reload sichtbar.
+
+**Evidenzklasse:** dieser Nachweis nutzt den FIXTURE-Adapter, nicht eine echte
+Adressdienst-Instanz. Er belegt Oberflaeche, eigene Route, Vertrag und
+Persistenz. Er belegt NICHT die Erreichbarkeit oder Antwortqualitaet eines
+Live-Providers - das braucht Zugangsdaten und bleibt H-04.

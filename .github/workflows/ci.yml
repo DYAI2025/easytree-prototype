@@ -119,6 +119,13 @@ jobs:
       # `node --env-file=.env.local` und brechen ohne die Datei mit Exit 9 ab.
       # Der Playwright-globalSetup ruft genau diese beiden Skripte auf.
       # Nur nicht-geheime lokale Defaults, wie in .env.example.
+      #
+      # GEOCODER_PROVIDER steht hier bewusst auf manual und WIDERSPRICHT NICHT
+      # dem fixture-Wert in playwright.config.ts: webServer.env landet direkt in
+      # process.env des gestarteten Servers, und Next ueberschreibt vorhandene
+      # Prozessvariablen nicht mit .env-Dateien. Gemessen am 08.09.2026 lokal -
+      # .env.local sagte manual, der Lauf sah trotzdem die Fixture-Kandidaten.
+      # Diese Datei hier versorgt db:reset und db:seed, nicht den Webserver.
       - name: .env.local fuer die Datenbankskripte schreiben
         run: |
           cat > .env.local <<'ENVEOF'
