@@ -16,7 +16,9 @@ import { MonthGrid } from "./month-grid";
 import { MonthToolbar } from "./month-toolbar";
 import { Button } from "../primitives/button";
 import { EngagementDrawer } from "../engagement/engagement-drawer";
-import { DayDrawer } from "../day/day-drawer";
+import { DayDrawer, type DayChangeEntwurf } from "../day/day-drawer";
+import { SeriesPreviewDialog, type SeriesNamen } from "../day/series-preview-dialog";
+import type { WorksiteDayDetailDto } from "../../contracts/worksite-days";
 
 /**
  * Client-Teil der Planungsseite.
@@ -35,6 +37,16 @@ export function PlanungsAnsicht({ view }: { readonly view: MonthPlanningViewDto 
    * setzen sie aber voraus. Siehe PA-08.
    */
   const [offenerTag, setOffenerTag] = useState<string | null>(null);
+  /**
+   * Serienaenderung: der Tagesdrawer speichert bei diesem Scope NICHT selbst,
+   * sondern reicht seinen Entwurf hierher - die Vorschau ist die verlangte
+   * ausdrueckliche Bestaetigung (A-06, OQ-001).
+   */
+  const [serie, setSerie] = useState<{
+    entwurf: DayChangeEntwurf;
+    detail: WorksiteDayDetailDto;
+    namen: SeriesNamen;
+  } | null>(null);
 
   const grid: MonthGridModel = useMemo(() => buildMonthGrid(view.month), [view.month]);
 
@@ -131,6 +143,21 @@ export function PlanungsAnsicht({ view }: { readonly view: MonthPlanningViewDto 
           today={view.today}
           onClose={() => setOffenerTag(null)}
           onSaved={() => {
+            setOffenerTag(null);
+            router.refresh();
+          }}
+          onSeriesPreview={(entwurf, detail, namen) => setSerie({ entwurf, detail, namen })}
+        />
+      )}
+
+      {serie !== null && (
+        <SeriesPreviewDialog
+          detail={serie.detail}
+          entwurf={serie.entwurf}
+          namen={serie.namen}
+          onClose={() => setSerie(null)}
+          onApplied={() => {
+            setSerie(null);
             setOffenerTag(null);
             router.refresh();
           }}

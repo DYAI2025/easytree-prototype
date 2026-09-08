@@ -11,6 +11,7 @@ import { ApiProblemError, apiGet, apiPost } from "../../lib/api-client";
 import { formatiereDatumLang } from "../calendar/date-labels";
 import { Button } from "../primitives/button";
 import { Drawer } from "../primitives/drawer";
+import type { SeriesNamen } from "./series-preview-dialog";
 
 /**
  * Tagesbearbeitung eines Baustellentags (REQ-F-015, REQ-F-017, REQ-F-014).
@@ -52,7 +53,11 @@ export interface DayDrawerProps {
    * die Vorschau geoeffnet (TASK-044). Fehlt der Aufrufer, bleibt nur der
    * Tagesscope nutzbar.
    */
-  readonly onSeriesPreview?: (entwurf: DayChangeEntwurf, detail: WorksiteDayDetailDto) => void;
+  readonly onSeriesPreview?: (
+    entwurf: DayChangeEntwurf,
+    detail: WorksiteDayDetailDto,
+    namen: SeriesNamen,
+  ) => void;
 }
 
 /** `HH:MM:SS` aus der Datenbank vs. `HH:MM` im Zeitfeld - hier gekuerzt. */
@@ -169,7 +174,10 @@ export function DayDrawer({
     }
 
     if (scope === "THIS_AND_FOLLOWING") {
-      onSeriesPreview?.(entwurf, detail);
+      onSeriesPreview?.(entwurf, detail, {
+        employees: employees.map((p) => ({ id: p.id, name: p.displayName })),
+        resources: resources.map((r) => ({ id: r.id, name: r.name })),
+      });
 
       return;
     }
