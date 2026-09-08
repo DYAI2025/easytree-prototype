@@ -89,8 +89,23 @@ jobs:
   e2e:
     name: e2e (playwright chromium)
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: easytree
+          POSTGRES_DB: easytree_prototype
+        # Der Job laeuft auf dem Runner, nicht im Container: Port mappen, Host 127.0.0.1.
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       EASYTREE_FIXED_TODAY: "2026-09-01"
+      DATABASE_URL: postgres://postgres:easytree@127.0.0.1:5432/easytree_prototype
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -100,13 +115,24 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
-      # PLAYWRIGHT_BASE_URL bleibt ungesetzt: playwright.config.ts startet dann
-      # selbst "pnpm build && pnpm start" auf http://127.0.0.1:3000.
-      #
-      # Kein postgres-Service und kein db:migrate/db:seed: die Startseite ist
-      # heute statisch, db:seed existiert noch nicht und db:migrate braucht
-      # .env.local. Beides kommt ab TASK-013/TASK-027 zusammen mit dem Service
-      # zurueck.
+      # .env.local ist Pflicht, nicht Komfort: db:reset und db:seed laufen ueber
+      # `node --env-file=.env.local` und brechen ohne die Datei mit Exit 9 ab.
+      # Der Playwright-globalSetup ruft genau diese beiden Skripte auf.
+      # Nur nicht-geheime lokale Defaults, wie in .env.example.
+      - name: .env.local fuer die Datenbankskripte schreiben
+        run: |
+          cat > .env.local <<'ENVEOF'
+          DATABASE_URL=postgres://postgres:easytree@127.0.0.1:5432/easytree_prototype
+          DATABASE_URL_TEST=postgres://postgres:easytree@127.0.0.1:5432/easytree_prototype_test
+          GEOCODER_PROVIDER=manual
+          GEOCODER_BASE_URL=
+          GEOCODER_USER_AGENT=
+          GEOCODER_ALLOW_FIXTURE=
+          EASYTREE_FIXED_TODAY=
+          ENVEOF
+      # Kein db:migrate-Schritt: e2e/fixtures/seed-helper.ts laeuft als
+      # Playwright-globalSetup und macht einmal pro Lauf db:reset (drop, create,
+      # migrate) plus db:seed.
       - run: pnpm test:e2e
       - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
