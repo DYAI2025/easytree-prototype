@@ -89,6 +89,12 @@ export function ResourceForm({ resource, onSaved, onCancel }: ResourceFormProps)
       koerper.identifier = werte.identifier;
     }
 
+    // Wie beim Mitarbeitendenformular: PATCH ersetzt vollstaendig, also muss
+    // der vorhandene Kostenhinweis mitreisen, sonst loescht ihn jedes Speichern.
+    if (resource?.costNote != null && resource.costNote !== "") {
+      koerper.costNote = resource.costNote;
+    }
+
     const satz = parseTagessatz(werte.dailyCost);
 
     // Kein Satz heisst: Feld weglassen, damit NULL gespeichert wird - nie 0.

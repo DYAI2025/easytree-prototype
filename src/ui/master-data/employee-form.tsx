@@ -101,6 +101,13 @@ export function EmployeeForm({ employee, onSaved, onCancel }: EmployeeFormProps)
       koerper.roleLabel = werte.roleLabel;
     }
 
+    // PATCH ersetzt vollstaendig: `costNote: command.costNote ?? null`. Ohne
+    // dieses Durchreichen loeschte jedes Speichern den Kostenhinweis, fuer den
+    // das Formular gar kein Feld hat.
+    if (employee?.costNote != null && employee.costNote !== "") {
+      koerper.costNote = employee.costNote;
+    }
+
     const satz = parseTagessatz(werte.dailyCost);
 
     // Kein Feld statt `null`: `MinorUnitsSchema.optional()` laesst nur

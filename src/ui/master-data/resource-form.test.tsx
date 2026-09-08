@@ -1,21 +1,23 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Resource } from "../../contracts/resource";
 import { ResourceAdmin, ResourceForm } from "./resource-form";
 
-const { apiPost } = vi.hoisted(() => ({ apiPost: vi.fn() }));
+const { apiPatch, apiPost } = vi.hoisted(() => ({ apiPatch: vi.fn(), apiPost: vi.fn() }));
 
 vi.mock("../../lib/api-client", async () => {
   const echt = await vi.importActual<typeof import("../../lib/api-client")>("../../lib/api-client");
 
-  return { ...echt, apiPost };
+  return { ...echt, apiPatch, apiPost };
 });
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 afterEach(cleanup);
 beforeEach(() => {
+  apiPatch.mockReset();
   apiPost.mockReset();
 });
 
@@ -93,5 +95,37 @@ describe("ResourceAdmin", () => {
       ["Hebebuehne HB-18", "Haecksler HX-9"],
       ["Seilklettersatz B"],
     ]);
+  });
+});
+
+/*
+ * Wie beim Mitarbeitendenformular: upsert-resource.ts setzt
+ * `costNote: command.costNote ?? null`. Ein Formular ohne dieses Feld muss den
+ * vorhandenen Wert mitsenden, sonst loescht jede Bearbeitung ihn stumm.
+ */
+describe("ResourceForm im Bearbeitungsmodus", () => {
+  it("traegt den vorhandenen Kostenhinweis unveraendert weiter", async () => {
+    const nutzer = userEvent.setup();
+    const vorhanden = {
+      ...mittel("a0000000-0000-4000-8000-000000000001", "machine", "Hebebuehne HB-18", "45000"),
+      identifier: "HB-18",
+      costNote: "PROTOTYPE_ONLY Demo-Fixture",
+    };
+
+    apiPatch.mockResolvedValue(vorhanden);
+
+    render(<ResourceForm resource={vorhanden} onSaved={() => {}} />);
+
+    await nutzer.click(screen.getByRole("button", { name: "Speichern" }));
+
+    expect(apiPatch).toHaveBeenCalledTimes(1);
+
+    const [pfad, koerper] = apiPatch.mock.calls[0]! as [string, Record<string, unknown>];
+
+    expect(pfad).toBe("/api/ressourcen/a0000000-0000-4000-8000-000000000001");
+    expect(koerper.costNote).toBe("PROTOTYPE_ONLY Demo-Fixture");
+    expect(koerper.kind).toBe("machine");
+    expect(koerper.identifier).toBe("HB-18");
+    expect(koerper.dailyCostMinorUnits).toBe("45000");
   });
 });

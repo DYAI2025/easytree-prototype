@@ -87,3 +87,29 @@ identisch.
 Mitarbeitenden und zwei Ressourcen dort ausgewaehlt sehen. Steht als
 `test.fixme` in `e2e/einsatz-anlegen.spec.ts` mit genau diesem Verweis.
 **Gilt nicht als bestanden.**
+
+## B-04: PATCH ersetzt vollstaendig - Stammdatenformulare loeschten den Kostenhinweis (08.09.2026)
+
+**Status: `CLOSED`**
+
+**Was war:** `upsertEmployee` und `upsertResource` setzen `costNote:
+command.costNote ?? null`. Ein weggelassenes Feld wird also als NULL
+geschrieben, nicht ignoriert - PATCH ist ein vollstaendiger Ersatz, keine
+Teilaenderung. Die neuen Formulare aus TASK-038/039 haben fuer `costNote` kein
+Eingabefeld und liessen es weg. Jedes Speichern einer bestehenden Person oder
+Ressource loeschte damit still den Hinweis, den der Seed auf
+`"PROTOTYPE_ONLY Demo-Fixture"` setzt.
+
+**Gefunden** bei der Rekonstruktion der Serverschicht vor TASK-040, nicht durch
+einen roten Test - die vier bzw. drei Faelle der Tasks pruefen nur den
+Anlegepfad.
+
+**Reparatur:** Beide Formulare reichen einen vorhandenen `costNote`
+unveraendert weiter. Zwei neue Tests pruefen den PATCH-Koerper; die
+Gegenmutation (Durchreichen entfernen) macht sie rot
+("expected undefined to be 'PROTOTYPE_ONLY Demo-Fixture'").
+
+**Was offen bleibt:** `employees.currency` und `resources.currency` sind
+`text not null default 'EUR'` im Schema und kommen in KEINEM Vertrag vor. Sie
+sind ueber keine Route schreibbar. Das ist heute folgenlos, weil der Prototyp
+nur EUR kennt - es ist aber keine Entscheidung, sondern eine Luecke.

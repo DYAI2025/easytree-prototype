@@ -4,16 +4,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { EmployeeForm } from "./employee-form";
 
-const { apiPost } = vi.hoisted(() => ({ apiPost: vi.fn() }));
+const { apiPatch, apiPost } = vi.hoisted(() => ({ apiPatch: vi.fn(), apiPost: vi.fn() }));
 
 vi.mock("../../lib/api-client", async () => {
   const echt = await vi.importActual<typeof import("../../lib/api-client")>("../../lib/api-client");
 
-  return { ...echt, apiPost };
+  return { ...echt, apiPatch, apiPost };
 });
 
 afterEach(cleanup);
 beforeEach(() => {
+  apiPatch.mockReset();
   apiPost.mockReset();
   apiPost.mockResolvedValue({
     id: "a0000000-0000-4000-8000-000000000001",
@@ -84,5 +85,52 @@ describe("EmployeeForm", () => {
     render(<EmployeeForm onSaved={() => {}} />);
 
     expect(screen.getByLabelText(/^Demo-Tagessatz \(Prototyp\)/)).toBeInTheDocument();
+  });
+});
+
+/*
+ * PATCH ist beim Server ein VOLLSTAENDIGER Ersatz, keine Teilaenderung:
+ * upsert-employee.ts setzt `costNote: command.costNote ?? null`. Ein Formular,
+ * das costNote weglaesst, loescht damit stillschweigend den Hinweis - im Seed
+ * steht dort bei jeder Person "PROTOTYPE_ONLY Demo-Fixture". Das Formular hat
+ * kein Feld dafuer, also muss es den vorhandenen Wert unveraendert mitsenden.
+ */
+describe("EmployeeForm im Bearbeitungsmodus", () => {
+  it("traegt den vorhandenen Kostenhinweis unveraendert weiter", async () => {
+    const nutzer = userEvent.setup();
+
+    apiPatch.mockResolvedValue({
+      id: "a0000000-0000-4000-8000-000000000001",
+      displayName: "Anna Bergmann",
+      roleLabel: "Teamleitung",
+      active: true,
+      dailyCostMinorUnits: "32000",
+      costNote: "PROTOTYPE_ONLY Demo-Fixture",
+    });
+
+    render(
+      <EmployeeForm
+        employee={{
+          id: "a0000000-0000-4000-8000-000000000001",
+          displayName: "Anna Bergmann",
+          roleLabel: "Teamleitung",
+          active: true,
+          dailyCostMinorUnits: "32000",
+          costNote: "PROTOTYPE_ONLY Demo-Fixture",
+        }}
+        onSaved={() => {}}
+      />,
+    );
+
+    await nutzer.click(screen.getByRole("button", { name: "Speichern" }));
+
+    expect(apiPatch).toHaveBeenCalledTimes(1);
+
+    const [pfad, koerper] = apiPatch.mock.calls[0]! as [string, Record<string, unknown>];
+
+    expect(pfad).toBe("/api/mitarbeitende/a0000000-0000-4000-8000-000000000001");
+    expect(koerper.costNote).toBe("PROTOTYPE_ONLY Demo-Fixture");
+    expect(koerper.dailyCostMinorUnits).toBe("32000");
+    expect(koerper.roleLabel).toBe("Teamleitung");
   });
 });
