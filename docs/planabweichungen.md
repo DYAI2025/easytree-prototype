@@ -140,3 +140,37 @@ wieder faellig) ebenfalls nicht.
 Die Karte oeffnet jetzt den Tagesdrawer; nach dem Speichern wird die
 Servertruth per `router.refresh()` neu geladen. Der Drawer-Zustand liegt wie
 beim Einsatz-Drawer in `useState`, nicht in der URL - siehe B-05.
+
+## PA-09: Die Kostenroute fehlt im Plan und musste entstehen
+
+`costOverview(deps, engagementId)` existiert seit TASK-022 als Query, aber es
+gibt in keinem Task eine HTTP-Route dafuer. TASK-046 baut den Kosten-Drawer als
+CLIENT-Komponente (drei Reiter, geoeffnet aus dem Tagesdrawer), und
+Client-Komponenten sprechen ausschliesslich ueber `/api/*` mit dem Server
+(REQ-A-002). Ohne Route waere der Drawer nicht mit Servertruth zu fuellen.
+
+Neu: `GET /api/einsaetze/[id]/kosten`. Die Antwort geht durch
+`CostOverviewSchema`, damit eine fehlende Kostengrundlage nachweislich `null`
+bleibt. Dazu `tests/integration/api-costs.test.ts` mit zwei Faellen gegen echtes
+PostgreSQL:
+
+- „Kronensicherung Allee" (Erik ohne Satz): 15 Tage, `missingCount 15`,
+  `complete false`, Summe 1.125.000 Minor Units, und JEDE Erik-Position hat
+  `amountMinorUnits === null`.
+- „Baumpflege Herbstschnitt": `complete true`, `missingCount 0`, Summe
+  1.410.000 Minor Units.
+
+Gegenmutation aus Abschnitt 14 („fehlende Kosten als 0") einmal ausgefuehrt:
+`const missing = false` plus `?? 0n` in `cost-calculation.ts` macht
+`src/domain/cost-calculation.test.ts` UND diesen Integrationstest rot.
+Ruecknahme per `diff` verifiziert.
+
+## PA-10: Der Einstieg in die Kosten musste verdrahtet werden
+
+Plan 6.5 nennt „Kosten anzeigen" als zweitrangige Aktion des Tagesdrawers,
+TASK-047 verlangt „Ueber eine Tageskarte Kosten anzeigen oeffnen" - aber kein
+Task verdrahtet es. Der Tagesdrawer hat jetzt diese Aktion; sie schliesst den
+Tagesdrawer und oeffnet den Kosten-Drawer.
+
+Produktinvariante 7 bleibt gewahrt: die Kostenansicht ist kein
+Navigationspunkt, sie ist nur aus dem Tageskontext erreichbar.

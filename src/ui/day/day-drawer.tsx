@@ -53,6 +53,8 @@ export interface DayDrawerProps {
    * die Vorschau geoeffnet (TASK-044). Fehlt der Aufrufer, bleibt nur der
    * Tagesscope nutzbar.
    */
+  /** Zweitrangige Aktion aus 6.5: die Kosten sind nie die Startflaeche. */
+  readonly onShowCosts?: (engagementId: string, engagementTitle: string) => void;
   readonly onSeriesPreview?: (
     entwurf: DayChangeEntwurf,
     detail: WorksiteDayDetailDto,
@@ -74,6 +76,7 @@ export function DayDrawer({
   today,
   onClose,
   onSaved,
+  onShowCosts,
   onSeriesPreview,
 }: DayDrawerProps) {
   const hinweisId = useId();
@@ -408,6 +411,14 @@ export function DayDrawer({
           </fieldset>
 
           <div className="flex justify-end gap-2">
+            {onShowCosts !== undefined && (
+              <Button
+                variant="secondary"
+                onClick={() => onShowCosts(detail.engagementId, detail.engagementTitle)}
+              >
+                Kosten anzeigen
+              </Button>
+            )}
             <Button variant="secondary" onClick={onClose}>
               Abbrechen
             </Button>

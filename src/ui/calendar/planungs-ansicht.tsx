@@ -18,6 +18,7 @@ import { Button } from "../primitives/button";
 import { EngagementDrawer } from "../engagement/engagement-drawer";
 import { DayDrawer, type DayChangeEntwurf } from "../day/day-drawer";
 import { SeriesPreviewDialog, type SeriesNamen } from "../day/series-preview-dialog";
+import { CostDrawer } from "../cost/cost-drawer";
 import type { WorksiteDayDetailDto } from "../../contracts/worksite-days";
 
 /**
@@ -42,6 +43,11 @@ export function PlanungsAnsicht({ view }: { readonly view: MonthPlanningViewDto 
    * sondern reicht seinen Entwurf hierher - die Vorschau ist die verlangte
    * ausdrueckliche Bestaetigung (A-06, OQ-001).
    */
+  /**
+   * Kosten sind NIE die Startflaeche (Produktinvariante 7): sie werden aus dem
+   * Tagesdrawer heraus geoeffnet, nicht aus der Navigation.
+   */
+  const [kosten, setKosten] = useState<{ id: string; titel: string } | null>(null);
   const [serie, setSerie] = useState<{
     entwurf: DayChangeEntwurf;
     detail: WorksiteDayDetailDto;
@@ -146,7 +152,19 @@ export function PlanungsAnsicht({ view }: { readonly view: MonthPlanningViewDto 
             setOffenerTag(null);
             router.refresh();
           }}
+          onShowCosts={(id, titel) => {
+            setOffenerTag(null);
+            setKosten({ id, titel });
+          }}
           onSeriesPreview={(entwurf, detail, namen) => setSerie({ entwurf, detail, namen })}
+        />
+      )}
+
+      {kosten !== null && (
+        <CostDrawer
+          engagementId={kosten.id}
+          engagementTitle={kosten.titel}
+          onClose={() => setKosten(null)}
         />
       )}
 
