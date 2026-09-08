@@ -9,6 +9,7 @@ import { z } from "zod";
 import { nonBlankText, type Customer } from "../../contracts/customer";
 import type { Worksite } from "../../contracts/worksite";
 import { ApiProblemError, apiPatch, apiPost } from "../../lib/api-client";
+import { AddressSearch, type AddressSearchValue } from "./address-search";
 import { Button } from "../primitives/button";
 
 /**
@@ -26,11 +27,15 @@ const KundeFormular = z.object({
   notes: z.string().trim().max(2000),
 });
 
+/*
+ * Adresse, PLZ, Ort und Koordinaten gehoeren der AddressSearch und liegen
+ * deshalb NICHT im react-hook-form-Zustand: sie entstehen entweder aus einem
+ * Suchtreffer oder aus der manuellen Eingabe, und beide Wege setzen sie
+ * gemeinsam. Zwei Quellen fuer dieselben vier Felder waeren die naechste
+ * Fehlerstelle.
+ */
 const BaustelleFormular = z.object({
   name: nonBlankText(),
-  addressLine: nonBlankText(300),
-  postalCode: z.string().trim().max(20),
-  city: z.string().trim().max(120),
   notes: z.string().trim().max(2000),
 });
 
@@ -281,19 +286,22 @@ function BaustelleForm({
 }) {
   const kundeId = useId();
   const nameId = useId();
-  const adresseId = useId();
-  const plzId = useId();
-  const ortId = useId();
   const notizId = useId();
   const [fehler, setFehler] = useState<string | null>(null);
+  const [adresse, setAdresse] = useState<AddressSearchValue>({
+    addressLine: worksite?.addressLine ?? "",
+    postalCode: worksite?.postalCode ?? "",
+    city: worksite?.city ?? "",
+    lat: worksite?.lat ?? null,
+    lng: worksite?.lng ?? null,
+    geocodeSource: worksite?.geocodeSource ?? null,
+  });
+  const [adresseFehler, setAdresseFehler] = useState<string | undefined>(undefined);
 
   const form = useForm({
     resolver: zodResolver(BaustelleFormular),
     defaultValues: {
       name: worksite?.name ?? "",
-      addressLine: worksite?.addressLine ?? "",
-      postalCode: worksite?.postalCode ?? "",
-      city: worksite?.city ?? "",
       notes: worksite?.notes ?? "",
     },
   });
@@ -301,14 +309,22 @@ function BaustelleForm({
   const absenden = form.handleSubmit(async (werte) => {
     setFehler(null);
 
+    if (adresse.addressLine.trim() === "") {
+      setAdresseFehler("Pflichtfeld");
+
+      return;
+    }
+
+    setAdresseFehler(undefined);
+
     const koerper: Record<string, unknown> = {
       name: werte.name,
-      addressLine: werte.addressLine,
+      addressLine: adresse.addressLine,
     };
 
     for (const [feld, wert] of [
-      ["postalCode", werte.postalCode],
-      ["city", werte.city],
+      ["postalCode", adresse.postalCode],
+      ["city", adresse.city],
       ["notes", werte.notes],
     ] as const) {
       if (wert !== "") {
@@ -316,21 +332,22 @@ function BaustelleForm({
       }
     }
 
+    // Koordinaten nur als Paar - eine halbe Koordinate sieht aus wie ein Ort.
+    // Dieselbe Regel steht als CHECK in der Datenbank und als Refinement im
+    // Vertrag; hier wird sie eingehalten, nicht neu erfunden.
+    if (adresse.lat !== null && adresse.lng !== null) {
+      koerper.lat = adresse.lat;
+      koerper.lng = adresse.lng;
+    }
+
+    if (adresse.geocodeSource !== null) {
+      koerper.geocodeSource = adresse.geocodeSource;
+    }
+
     try {
       if (worksite === undefined) {
         await apiPost<Worksite>("/api/baustellen", { customerId: kunde.id, ...koerper });
       } else {
-        // Koordinaten und Quelle reisen unveraendert mit: UpdateWorksiteBody
-        // ersetzt vollstaendig, ein Weglassen wuerde sie loeschen.
-        if (worksite.lat !== null && worksite.lng !== null) {
-          koerper.lat = worksite.lat;
-          koerper.lng = worksite.lng;
-        }
-
-        if (worksite.geocodeSource !== null) {
-          koerper.geocodeSource = worksite.geocodeSource;
-        }
-
         await apiPatch<Worksite>(`/api/baustellen/${worksite.id}`, koerper);
       }
 
@@ -341,7 +358,6 @@ function BaustelleForm({
   });
 
   const nameFehler = form.formState.errors.name?.message;
-  const adresseFehler = form.formState.errors.addressLine?.message;
 
   return (
     <form
@@ -380,38 +396,18 @@ function BaustelleForm({
         </p>
       )}
 
-      <label htmlFor={adresseId} className="font-medium">
-        Adresse
-      </label>
-      <input
-        id={adresseId}
-        {...form.register("addressLine")}
-        aria-invalid={adresseFehler === undefined ? undefined : true}
-        className="rounded border border-line bg-surface p-2"
+      <AddressSearch
+        value={adresse}
+        onChange={(neu) => {
+          setAdresse(neu);
+          setAdresseFehler(undefined);
+        }}
       />
       {adresseFehler !== undefined && (
         <p role="alert" className="text-danger-text">
           {adresseFehler}
         </p>
       )}
-
-      <label htmlFor={plzId} className="font-medium">
-        Postleitzahl
-      </label>
-      <input
-        id={plzId}
-        {...form.register("postalCode")}
-        className="rounded border border-line bg-surface p-2"
-      />
-
-      <label htmlFor={ortId} className="font-medium">
-        Ort
-      </label>
-      <input
-        id={ortId}
-        {...form.register("city")}
-        className="rounded border border-line bg-surface p-2"
-      />
 
       <label htmlFor={notizId} className="font-medium">
         Notiz

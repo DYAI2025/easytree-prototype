@@ -145,3 +145,62 @@ describe("CustomerPanel", () => {
     pruefe(container);
   });
 });
+
+/*
+ * Die Adresssuche ist in TASK-041 als eigene Komponente entstanden, aber KEIN
+ * Task verdrahtet sie. TASK-042 verlangt den Browsernachweis "Auswahl speichert
+ * Koordinaten (nach Reload sichtbar)" - dafuer braucht es eine Flaeche, auf der
+ * eine Baustelle angelegt wird. Das ist diese hier. Siehe PA-06.
+ */
+describe("CustomerPanel mit Adresssuche", () => {
+  it("speichert die Koordinaten und die Quelle des gewaehlten Treffers", async () => {
+    const nutzer = userEvent.setup();
+
+    apiPost.mockImplementation(async (pfad: string) =>
+      pfad === "/api/geocoding/suche"
+        ? {
+            provider: "fixture",
+            candidates: [
+              {
+                label: "Nordring 12, 14467 Potsdam",
+                addressLine: "Nordring 12",
+                postalCode: "14467",
+                city: "Potsdam",
+                country: "DE",
+                lat: 52.4009,
+                lng: 13.0591,
+                source: "fixture",
+              },
+            ],
+          }
+        : { id: "neu" },
+    );
+
+    render(<CustomerPanel customers={KUNDEN} worksites={BAUSTELLEN} />);
+
+    await nutzer.click(auswaehlen("Stadtwerke Musterstadt"));
+    await nutzer.click(screen.getByRole("button", { name: "Neue Baustelle" }));
+
+    const formular = screen.getByRole("form", { name: "Neue Baustelle" });
+
+    await nutzer.type(within(formular).getByLabelText("Name der Baustelle"), "Parkanlage Nordring");
+    await nutzer.type(within(formular).getByLabelText("Adresse"), "Nordring");
+    await nutzer.click(within(formular).getByRole("button", { name: "Adresse suchen" }));
+    await nutzer.click(await screen.findByRole("option", { name: "Nordring 12, 14467 Potsdam" }));
+    await nutzer.click(within(formular).getByRole("button", { name: "Baustelle speichern" }));
+
+    const anlage = apiPost.mock.calls.find(([pfad]) => pfad === "/api/baustellen");
+
+    expect(anlage).toBeDefined();
+    expect(anlage![1]).toMatchObject({
+      customerId: KUNDEN[0]!.id,
+      name: "Parkanlage Nordring",
+      addressLine: "Nordring 12",
+      postalCode: "14467",
+      city: "Potsdam",
+      lat: 52.4009,
+      lng: 13.0591,
+      geocodeSource: "fixture",
+    });
+  });
+});

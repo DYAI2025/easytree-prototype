@@ -70,3 +70,39 @@ Die Regel selbst ist unveraendert und wird weiter geprueft: es wird **niemals
 0** gesendet. Der Test assertiert beides - das Feld fehlt, und im Koerper steht
 weder `0` noch `"0"`. Gegenmutation `koerper.dailyCostMinorUnits = satz ?? "0"`
 macht ihn rot (gemessen), Ruecknahme per `diff` verifiziert.
+
+## PA-05: Die Quellenbeschriftung darf den Providernamen nicht als Literal fuehren
+
+Plan 6.8 schreibt die Statuszeile vor: „Quelle: Nominatim
+(Entwicklungsadapter)" / „manuell".
+
+Dagegen steht `src/server/geocoding/geocoder.test.ts:199` („erwaehnt nominatim
+nirgends ausserhalb der Serverschicht"): der Test laeuft
+`git grep -nil nominatim -- src/ui src/app` und erwartet Exit 1, also KEINEN
+Treffer. Der vorgeschriebene Satz waere ein Treffer und haette den Test rot
+gemacht.
+
+`AddressSearch` baut die Beschriftung deshalb zur Laufzeit aus dem Wert, den
+der Server liefert: `quelleLabel("manual") === "manuell"`,
+`quelleLabel("fixture") === "Fixture (Prototyp, erfundene Koordinaten)"`, und
+jeder andere Wert wird zu `"<wert> (Entwicklungsadapter)"`. Der Nutzer sieht
+damit genau den vom Plan gewuenschten Satz; im Quelltext der Client-Schicht
+steht der Providername nicht.
+
+Keine Regel gelockert: der Guard-Test bleibt unveraendert und gruen.
+
+## PA-06: Die Adresssuche musste verdrahtet werden - kein Task tut das
+
+TASK-041 erzeugt `src/ui/master-data/address-search.tsx`. Kein Task des Plans
+baut sie irgendwo ein. TASK-042 verlangt aber den Browsernachweis „Auswahl
+speichert Koordinaten (nach Reload sichtbar)" - das braucht eine Flaeche, auf
+der eine Baustelle mit Adresse angelegt wird.
+
+Die einzige solche Flaeche ausserhalb des Einsatz-Drawers ist das
+Baustellenformular auf `/auftraggeber` (TASK-040). Dort ist die Komponente
+jetzt eingebaut: Adresse, PLZ, Ort, Koordinaten und Quelle kommen aus ihr, Name
+und Notiz bleiben im Formular.
+
+Der Einsatz-Drawer (`step-worksite.tsx`, TASK-034) bleibt bewusst unveraendert.
+Er legt Baustellen weiterhin ohne Koordinaten an - das ist der dokumentierte
+Manual-Pfad und nicht Gegenstand von TASK-041/042.
