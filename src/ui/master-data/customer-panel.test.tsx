@@ -1,0 +1,147 @@
+import { cleanup, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { Customer } from "../../contracts/customer";
+import type { Worksite } from "../../contracts/worksite";
+import { CustomerPanel } from "./customer-panel";
+
+const { apiPatch, apiPost } = vi.hoisted(() => ({ apiPatch: vi.fn(), apiPost: vi.fn() }));
+
+vi.mock("../../lib/api-client", async () => {
+  const echt = await vi.importActual<typeof import("../../lib/api-client")>("../../lib/api-client");
+
+  return { ...echt, apiPatch, apiPost };
+});
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+
+afterEach(cleanup);
+beforeEach(() => {
+  apiPatch.mockReset();
+  apiPost.mockReset();
+});
+
+const kunde = (id: string, name: string): Customer => ({
+  id,
+  name,
+  contact: null,
+  notes: null,
+  active: true,
+});
+
+const baustelle = (id: string, customerId: string, name: string): Worksite => ({
+  id,
+  customerId,
+  name,
+  addressLine: "Musterweg 1",
+  postalCode: null,
+  city: null,
+  country: "DE",
+  lat: null,
+  lng: null,
+  geocodeSource: null,
+  notes: null,
+  active: true,
+});
+
+const KUNDEN = [
+  kunde("a0000000-0000-4000-8000-000000000001", "Stadtwerke Musterstadt"),
+  kunde("a0000000-0000-4000-8000-000000000002", "Wohnungsgenossenschaft Gruenblick eG"),
+];
+
+const BAUSTELLEN = [
+  baustelle("b0000000-0000-4000-8000-000000000001", KUNDEN[0]!.id, "Parkanlage Nordring"),
+  baustelle("b0000000-0000-4000-8000-000000000002", KUNDEN[0]!.id, "Allee am Wasserwerk"),
+  baustelle("b0000000-0000-4000-8000-000000000003", KUNDEN[1]!.id, "Innenhof Gruenblick"),
+];
+
+function auswaehlen(name: string) {
+  return screen.getByRole("button", { name: `${name} auswaehlen` });
+}
+
+describe("CustomerPanel", () => {
+  it("zeigt nach der Auswahl genau die Baustellen dieses Auftraggebers", async () => {
+    const nutzer = userEvent.setup();
+
+    render(<CustomerPanel customers={KUNDEN} worksites={BAUSTELLEN} />);
+
+    await nutzer.click(auswaehlen("Stadtwerke Musterstadt"));
+
+    const bereich = screen.getByRole("region", { name: "Baustellen" });
+
+    expect(
+      within(bereich)
+        .getAllByTestId("baustellenname")
+        .map((n) => n.textContent),
+    ).toEqual(["Parkanlage Nordring", "Allee am Wasserwerk"]);
+
+    await nutzer.click(auswaehlen("Wohnungsgenossenschaft Gruenblick eG"));
+
+    expect(
+      within(screen.getByRole("region", { name: "Baustellen" }))
+        .getAllByTestId("baustellenname")
+        .map((n) => n.textContent),
+    ).toEqual(["Innenhof Gruenblick"]);
+  });
+
+  it("oeffnet Neue Baustelle mit vorbelegtem Auftraggeber", async () => {
+    const nutzer = userEvent.setup();
+
+    render(<CustomerPanel customers={KUNDEN} worksites={BAUSTELLEN} />);
+
+    await nutzer.click(auswaehlen("Wohnungsgenossenschaft Gruenblick eG"));
+    await nutzer.click(screen.getByRole("button", { name: "Neue Baustelle" }));
+
+    const formular = screen.getByRole("form", { name: "Neue Baustelle" });
+    const auftraggeber = within(formular).getByLabelText("Auftraggeber") as HTMLInputElement;
+
+    expect(auftraggeber.value).toBe("Wohnungsgenossenschaft Gruenblick eG");
+    expect(auftraggeber).toBeDisabled();
+  });
+
+  /*
+   * Anti-CRM (REQ-F-003/F-004): der Auftraggeber ist hier ein Ordnungsbegriff
+   * fuer Baustellen, kein Vertriebsdatensatz. Faellt dieser Test, ist die
+   * Produktgrenze verschoben - nicht der Test falsch.
+   *
+   * Die Wortgrenzen sind Pflicht, keine Kosmetik: `textContent` klebt die Texte
+   * benachbarter Elemente ohne Trennzeichen zusammen, und aus
+   * "Baustelle" + "Adresse" wird "Baustel(leAd)resse" - ein Treffer fuer ein
+   * nacktes /Lead/i. Gemessen; der Test war zuerst aus genau diesem Grund rot.
+   */
+  it("fuehrt keine CRM-Felder - auf keiner der beiden Formularflaechen", async () => {
+    const nutzer = userEvent.setup();
+    const CRM = /\b(Lead\w*|Umsatz\w*|Angebot\w*|Pipeline\w*|Opportunit\w*)\b/i;
+
+    const pruefe = (container: HTMLElement): void => {
+      expect(container.textContent).not.toMatch(CRM);
+      expect(
+        [...container.querySelectorAll("label, [aria-label], [placeholder]")]
+          .map(
+            (e) =>
+              `${e.textContent} ${e.getAttribute("aria-label") ?? ""} ${e.getAttribute("placeholder") ?? ""}`,
+          )
+          .join(" | "),
+      ).not.toMatch(CRM);
+    };
+
+    const { container } = render(<CustomerPanel customers={KUNDEN} worksites={BAUSTELLEN} />);
+
+    await nutzer.click(auswaehlen("Stadtwerke Musterstadt"));
+
+    /*
+     * BEIDE Formulare, nicht nur eines. Die erste Fassung dieses Tests oeffnete
+     * ausschliesslich "Neue Baustelle"; eine Gegenmutation, die dem
+     * Auftraggeberformular ein Feld "Umsatz letztes Jahr" gab, blieb deshalb
+     * gruen. Der Test hatte eine Luecke genau dort, wo CRM-Drift am
+     * naheliegendsten ist.
+     */
+    await nutzer.click(screen.getByRole("button", { name: "Neue Baustelle" }));
+    pruefe(container);
+
+    await nutzer.click(screen.getByRole("button", { name: "Neuer Auftraggeber" }));
+    expect(screen.getByRole("form", { name: "Neuer Auftraggeber" })).toBeInTheDocument();
+    pruefe(container);
+  });
+});
