@@ -65,9 +65,9 @@ jetzt nur noch, wenn die Zelle selbst das Ziel des Ereignisses ist.
 **Nachweis:** sechs Komponententests plus `e2e/tagesstapel.spec.ts` mit vier
 Einsaetzen am selben Tag in echtem Chromium (Maus und Tastatur).
 
-## B-03: AC-05 war nur zur Haelfte belegt — REBASELINED (08.09.2026)
+## B-03: AC-05 war nur zur Haelfte belegt — GESCHLOSSEN (08.09.2026)
 
-**Status: AC-05a `PASS`, AC-05b `DEFERRED_DUE_TO_PLAN_DEPENDENCY_CONTRADICTION`**
+**Status: AC-05a `PASS`, AC-05b `PASS` (mit TASK-043 eingeloest)**
 
 **Der Widerspruch:** TASK-037 verlangt, dass die zugeordneten Mitarbeitenden
 und Ressourcen nach `page.reload()` "im Tagesdrawer weiterhin gewaehlt" sind.
@@ -83,10 +83,15 @@ weiterhin GENAU diese zwei Mitarbeitenden und zwei Ressourcen - geprueft ueber
 Einsatz-Id und alle fuenf Baustellentag-Ids sind vor und nach dem Reload
 identisch.
 
-**AC-05b (faellig mit TASK-043/045):** Tagesdrawer oeffnen und dieselben zwei
-Mitarbeitenden und zwei Ressourcen dort ausgewaehlt sehen. Steht als
-`test.fixme` in `e2e/einsatz-anlegen.spec.ts` mit genau diesem Verweis.
-**Gilt nicht als bestanden.**
+**AC-05b (eingeloest mit TASK-043, 08.09.2026):** Der Tagesdrawer existiert und
+ist an der Tageskarte verdrahtet (PA-08). Der Test ist kein `test.fixme` mehr,
+sondern laeuft: Einsatz mit zwei namentlich gewaehlten Personen und zwei
+Ressourcen anlegen, `page.reload()`, Tageskarte anklicken, Tagesdrawer lesen.
+Geprueft werden IDS ueber das `value`-Attribut der Checkboxen, nicht Anzahlen -
+und zusaetzlich, dass jede NICHT zugeordnete Person und Ressource ausdruecklich
+nicht angehakt ist. Gegenmutation "alle vorauswaehlen" macht ihn rot (gemessen:
+"Expected - 0 / Received + 3"). Gruen in echtem Chromium gegen echtes
+PostgreSQL.
 
 ## B-04: PATCH ersetzt vollstaendig - Stammdatenformulare loeschten den Kostenhinweis (08.09.2026)
 
@@ -113,3 +118,25 @@ Gegenmutation (Durchreichen entfernen) macht sie rot
 `text not null default 'EUR'` im Schema und kommen in KEINEM Vertrag vor. Sie
 sind ueber keine Route schreibbar. Das ist heute folgenlos, weil der Prototyp
 nur EUR kennt - es ist aber keine Entscheidung, sondern eine Luecke.
+
+## B-05: Der Drawer-Zustand steht nicht in der URL (08.09.2026)
+
+**Status: `OPEN_BY_PRECEDENT`**
+
+`CLAUDE.md` nennt als Zustandsvertrag
+`/planung?monat=…&tag=…&drawer=neu|tag|kosten&id=…`. Tatsaechlich steht nur
+`monat` in der URL; welcher Drawer offen ist, haelt `PlanungsAnsicht` in
+`useState` - so seit TASK-034 fuer den Einsatz-Drawer, so bewertet im Product
+Gate, und so jetzt auch fuer den Tagesdrawer.
+
+**Warum nicht still nachgezogen:** die Umstellung beruehrt den Einsatz-Drawer,
+den Kalender und jede Spec, die einen Drawer oeffnet. Kein Akzeptanzkriterium
+von TASK-043 bis TASK-047 verlangt einen teilbaren Drawer-Link; sie verlangen
+Servertruth, und die ist unabhaengig davon erfuellt (AC-05b, AC-11, AC-12).
+
+**Was NICHT passiert ist:** kein `localStorage`, kein `sessionStorage`. Der
+Formularzustand lebt in der Drawer-Instanz, der Fachzustand im Server.
+
+**Naechster Schritt:** entweder den Vertrag in `CLAUDE.md` auf den gebauten
+Stand ziehen oder die URL-Zustaende als eigene Aufgabe nachziehen. Beides ist
+eine Produktentscheidung, keine stille Reparatur.

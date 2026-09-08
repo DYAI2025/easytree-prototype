@@ -16,6 +16,7 @@ import { MonthGrid } from "./month-grid";
 import { MonthToolbar } from "./month-toolbar";
 import { Button } from "../primitives/button";
 import { EngagementDrawer } from "../engagement/engagement-drawer";
+import { DayDrawer } from "../day/day-drawer";
 
 /**
  * Client-Teil der Planungsseite.
@@ -27,6 +28,13 @@ import { EngagementDrawer } from "../engagement/engagement-drawer";
 export function PlanungsAnsicht({ view }: { readonly view: MonthPlanningViewDto }) {
   const router = useRouter();
   const [drawerOffen, setDrawerOffen] = useState(false);
+  /*
+   * Der geoeffnete Baustellentag. Bis hierher hatte `DayCardStack` ein
+   * `onOpen={() => {}}` - ein Control, das einen Weg behauptet, den es nicht
+   * gibt. Kein Task des Plans verdrahtet die Tageskarte; TASK-045 und AC-05b
+   * setzen sie aber voraus. Siehe PA-08.
+   */
+  const [offenerTag, setOffenerTag] = useState<string | null>(null);
 
   const grid: MonthGridModel = useMemo(() => buildMonthGrid(view.month), [view.month]);
 
@@ -52,7 +60,7 @@ export function PlanungsAnsicht({ view }: { readonly view: MonthPlanningViewDto 
 
     for (const [datum, karten] of proTag) {
       zahlen[datum] = karten.length;
-      knoten[datum] = <DayCardStack cards={karten} onOpen={() => {}} />;
+      knoten[datum] = <DayCardStack cards={karten} onOpen={setOffenerTag} />;
     }
 
     return { cardsByDate: knoten, countsByDate: zahlen };
@@ -116,6 +124,18 @@ export function PlanungsAnsicht({ view }: { readonly view: MonthPlanningViewDto 
         onCreateForDate={() => setDrawerOffen(true)}
         onMonthChange={(richtung) => wechsleMonat(addMonths(view.month, richtung))}
       />
+
+      {offenerTag !== null && (
+        <DayDrawer
+          worksiteDayId={offenerTag}
+          today={view.today}
+          onClose={() => setOffenerTag(null)}
+          onSaved={() => {
+            setOffenerTag(null);
+            router.refresh();
+          }}
+        />
+      )}
 
       {drawerOffen && (
         <EngagementDrawer

@@ -207,29 +207,104 @@ test.describe("einsatz-anlegen", () => {
   });
 
   /*
-   * AC-05b: DEFERRED_DUE_TO_PLAN_DEPENDENCY_CONTRADICTION
+   * AC-05b - mit TASK-043 wieder faellig und hier eingeloest.
    *
-   * Der Plan verlangt in TASK-037, die Auswahl nach dem Reload "im
-   * Tagesdrawer" wiederzusehen. Den Tagesdrawer baut derselbe Plan aber erst
-   * in TASK-043. Das ist ein Widerspruch in der Aufgabenreihenfolge, kein
-   * Fehler des Produktcodes und keine offene Human-Entscheidung.
+   * Der Fall war `DEFERRED_DUE_TO_PLAN_DEPENDENCY_CONTRADICTION`, weil
+   * TASK-037 den Tagesdrawer verlangte, den der Plan erst in TASK-043 baut.
+   * Der Drawer existiert jetzt und ist an der Tageskarte verdrahtet (PA-08).
    *
-   * Neu geschnitten:
-   *   AC-05a (oben, gruen) - die Persistenz selbst, gegen die Servertruth
-   *                          aus /api/baustellentage geprueft.
-   *   AC-05b (hier)        - dieselbe Auswahl im Tagesdrawer, faellig mit
-   *                          TASK-043/045.
-   *
-   * Dieser Fall gilt ausdruecklich NICHT als bestanden.
+   * Geprueft werden IDS, nicht Anzahlen: "zwei angehakt" bliebe auch dann
+   * gruen, wenn der Server zwei ANDERE Personen gespeichert haette. Und jede
+   * nicht zugeordnete Person bzw. Ressource muss ausdruecklich NICHT angehakt
+   * sein - sonst wuerde "alles angehakt" als Erfolg durchgehen.
    */
-  test.fixme("AC-05b: der Tagesdrawer zeigt dieselbe Auswahl erneut", async ({ page }) => {
-    await page.goto(PLANUNG);
-    await page.getByTestId("tageskarte").first().click();
+  test("AC-05b: der Tagesdrawer zeigt nach dem Reload dieselben Ids erneut", async ({
+    page,
+    request,
+  }) => {
+    const titel = `${TITEL_BASIS} AC-05b`;
+
+    const leute = (await (await request.get("/api/mitarbeitende")).json()) as {
+      items: { id: string; displayName: string }[];
+    };
+    const geraete = (await (await request.get("/api/ressourcen")).json()) as {
+      items: { id: string; name: string }[];
+    };
+    const erwartetePersonen = leute.items.slice(0, 2);
+    const erwarteteMittel = geraete.items.slice(0, 2);
+
+    expect(erwartetePersonen).toHaveLength(2);
+    expect(erwarteteMittel).toHaveLength(2);
+
+    // Eigener, sonst voellig unbelegter Monat. 2026-12 waere falsch: dort legt
+    // e2e/tagesstapel.spec.ts vier Einsaetze auf den 08.12. und zaehlt sie -
+    // eine fuenfte Karte aus diesem Test hat jene Zusicherung rot gemacht
+    // (gemessen). Alle Specs teilen EINE Datenbank.
+    const dialog = await einsatzAnlegen(page, {
+      start: "2027-01-11",
+      ende: "2027-01-12",
+      titel,
+    });
+
+    await dialog.getByRole("button", { name: "Weiter" }).click();
+
+    for (const person of erwartetePersonen) {
+      await dialog
+        .getByTestId("mitarbeitende")
+        .getByRole("checkbox", { name: new RegExp(person.displayName) })
+        .check();
+    }
+
+    for (const mittel of erwarteteMittel) {
+      await dialog
+        .getByTestId("ressourcen")
+        .getByRole("checkbox", { name: new RegExp(mittel.name) })
+        .check();
+    }
+
+    await dialog.getByRole("button", { name: "Einsatz anlegen" }).click();
+    await expect(page.getByRole("dialog")).toBeHidden();
+
+    await page.goto("/planung?monat=2027-01");
+    await page.reload();
+
+    await page.getByTestId("tageskarte").filter({ hasText: titel }).first().click();
 
     const tagesdrawer = page.getByRole("dialog");
 
-    await expect(tagesdrawer.getByTestId("gewaehlte-personen")).toContainText("2");
-    await expect(tagesdrawer.getByTestId("gewaehlte-ressourcen")).toContainText("2");
+    await expect(tagesdrawer.getByTestId("tageskopf")).toContainText(titel);
+
+    const angehakt = async (bereich: string): Promise<string[]> =>
+      (
+        await tagesdrawer
+          .getByTestId(bereich)
+          .locator('input[type="checkbox"]:checked')
+          .evaluateAll((els) => els.map((el) => (el as HTMLInputElement).value))
+      ).sort();
+
+    expect(await angehakt("drawer-team")).toEqual(erwartetePersonen.map((p) => p.id).sort());
+    expect(await angehakt("drawer-ressourcen")).toEqual(erwarteteMittel.map((r) => r.id).sort());
+
+    const nichtAngehakt = async (bereich: string): Promise<string[]> =>
+      (
+        await tagesdrawer
+          .getByTestId(bereich)
+          .locator('input[type="checkbox"]:not(:checked)')
+          .evaluateAll((els) => els.map((el) => (el as HTMLInputElement).value))
+      ).sort();
+
+    expect(await nichtAngehakt("drawer-team")).toEqual(
+      leute.items
+        .filter((p) => !erwartetePersonen.some((e) => e.id === p.id))
+        .map((p) => p.id)
+        .sort(),
+    );
+    expect(await nichtAngehakt("drawer-ressourcen")).toEqual(
+      geraete.items
+        .filter((r) => !erwarteteMittel.some((e) => e.id === r.id))
+        .map((r) => r.id)
+        .sort(),
+    );
   });
 
   test("AC-11: die Einsatz-Id bleibt ueber einen Reload identisch", async ({ page }) => {

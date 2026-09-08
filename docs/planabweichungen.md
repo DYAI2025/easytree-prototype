@@ -125,3 +125,18 @@ verlangt: Auswahl speichert Koordinaten, nach Reload sichtbar.
 Adressdienst-Instanz. Er belegt Oberflaeche, eigene Route, Vertrag und
 Persistenz. Er belegt NICHT die Erreichbarkeit oder Antwortqualitaet eines
 Live-Providers - das braucht Zugangsdaten und bleibt H-04.
+
+## PA-08: Die Tageskarte war nicht verdrahtet - kein Task tut das
+
+`planungs-ansicht.tsx` uebergab dem `DayCardStack` bis TASK-043 ein
+`onOpen={() => {}}`. Eine Tageskarte sah also anklickbar aus und tat nichts -
+dieselbe Klasse von Befund wie B-02 („+n weitere" ohne Handler).
+
+Kein Task des Plans verdrahtet sie: TASK-043 erzeugt den Drawer, TASK-045 und
+TASK-047 beginnen beide mit „Ueber eine Tageskarte ... oeffnen". Ohne die
+Verdrahtung waere keiner der beiden ausfuehrbar, und AC-05b (mit TASK-043
+wieder faellig) ebenfalls nicht.
+
+Die Karte oeffnet jetzt den Tagesdrawer; nach dem Speichern wird die
+Servertruth per `router.refresh()` neu geladen. Der Drawer-Zustand liegt wie
+beim Einsatz-Drawer in `useState`, nicht in der URL - siehe B-05.
