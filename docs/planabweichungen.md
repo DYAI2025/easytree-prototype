@@ -43,3 +43,30 @@ Siehe `docs/beobachtungen.md`, B-03. TASK-037 verlangt einen Tagesdrawer, den
 derselbe Plan erst in TASK-043 baut. Das ist ein Widerspruch in der
 Aufgabenreihenfolge. AC-05a (Persistenz) ist jetzt gruen belegt, AC-05b
 (Wiederanzeige im Tagesdrawer) ist auf TASK-043/045 rebaselined.
+
+## PA-04: „leerer Tagessatz sendet `null`" ist am Vertrag gemessen nicht sendbar
+
+TASK-038 Schritt 1 verlangt: „leerer Tagessatz sendet `null` (nicht `0`)".
+
+Gemessen gegen den echten Vertrag (`UpsertEmployeeCommand.safeParse`):
+
+```
+null          => FAIL Invalid input
+absent        => OK   {"displayName":"Erik"}
+empty string  => FAIL Invalid input
+string 25000  => OK   {"displayName":"Erik","dailyCostMinorUnits":"25000n"}
+```
+
+`MinorUnitsSchema.optional()` laesst ausschliesslich `undefined` zu. Ein
+literales `null` im Body wuerde der Server mit `VALIDATION_FAILED` ablehnen -
+das Formular waere gegen die reale Route unbenutzbar.
+
+Das serverseitig belegte Wire-Format fuer „kein Satz" ist deshalb das
+**fehlende Feld**; die Datenbank speichert daraufhin NULL. Belegt in
+`tests/integration/api-master-data.test.ts`: ein POST ohne
+`dailyCostMinorUnits` fuehrt in der Liste zu `dailyCostMinorUnits === null`.
+
+Die Regel selbst ist unveraendert und wird weiter geprueft: es wird **niemals
+0** gesendet. Der Test assertiert beides - das Feld fehlt, und im Koerper steht
+weder `0` noch `"0"`. Gegenmutation `koerper.dailyCostMinorUnits = satz ?? "0"`
+macht ihn rot (gemessen), Ruecknahme per `diff` verifiziert.
