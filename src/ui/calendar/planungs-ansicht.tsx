@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 
 import type { MonthPlanningViewDto } from "../../contracts/worksite-days";
 import {
@@ -14,6 +14,11 @@ import { parseLocalDate, type LocalDate } from "../../domain/local-date";
 import { DayCardStack, type DayCardModel } from "./day-card";
 import { MonthGrid } from "./month-grid";
 import { MonthToolbar } from "./month-toolbar";
+import {
+  planungsUrl,
+  type PlanungsUrlEingabe,
+  type PlanungsViewState,
+} from "./planning-view-state";
 import { Button } from "../primitives/button";
 import { EngagementDrawer } from "../engagement/engagement-drawer";
 import { DayDrawer, type DayChangeEntwurf } from "../day/day-drawer";
@@ -26,33 +31,59 @@ import type { WorksiteDayDetailDto } from "../../contracts/worksite-days";
  *
  * Sie bekommt die fertige `MonthPlanningView` als Prop - die Server Component
  * liest sie direkt aus der Query. Hier wird NICHT nachgeladen: die Servertruth
- * kommt einmal herein, und der Monatswechsel laeuft ueber die URL.
+ * kommt einmal herein.
+ *
+ * Der Ansichtszustand kommt genauso von aussen: welcher Drawer offen ist und
+ * welchen Tag bzw. Einsatz er adressiert, steht in der URL und wird in der
+ * Server Component aufgeloest (`resolvePlanungsViewState`). Diese Komponente
+ * SCHREIBT den Zustand nur - jedes Oeffnen und Schliessen ist eine Navigation.
+ * Vorher lag er in `useState`; damit ueberlebte kein Drawer einen Reload und
+ * ein Link auf einen Tag war nicht teilbar (Befund B-05).
+ *
+ * Im React-State bleibt nur, was sich aus einer URL gar nicht rekonstruieren
+ * laesst: der noch nicht gespeicherte Serien-Entwurf hinter der Vorschau.
  */
-export function PlanungsAnsicht({ view }: { readonly view: MonthPlanningViewDto }) {
+export function PlanungsAnsicht({
+  view,
+  viewState,
+}: {
+  readonly view: MonthPlanningViewDto;
+  readonly viewState: PlanungsViewState;
+}) {
   const router = useRouter();
-  const [drawerOffen, setDrawerOffen] = useState(false);
-  /*
-   * Der geoeffnete Baustellentag. Bis hierher hatte `DayCardStack` ein
-   * `onOpen={() => {}}` - ein Control, das einen Weg behauptet, den es nicht
-   * gibt. Kein Task des Plans verdrahtet die Tageskarte; TASK-045 und AC-05b
-   * setzen sie aber voraus. Siehe PA-08.
-   */
-  const [offenerTag, setOffenerTag] = useState<string | null>(null);
   /**
    * Serienaenderung: der Tagesdrawer speichert bei diesem Scope NICHT selbst,
    * sondern reicht seinen Entwurf hierher - die Vorschau ist die verlangte
-   * ausdrueckliche Bestaetigung (A-06, OQ-001).
+   * ausdrueckliche Bestaetigung (A-06, OQ-001). Der Entwurf ist ungespeicherte
+   * Formulararbeit und gehoert deshalb nicht in die URL.
    */
-  /**
-   * Kosten sind NIE die Startflaeche (Produktinvariante 7): sie werden aus dem
-   * Tagesdrawer heraus geoeffnet, nicht aus der Navigation.
-   */
-  const [kosten, setKosten] = useState<{ id: string; titel: string } | null>(null);
   const [serie, setSerie] = useState<{
     entwurf: DayChangeEntwurf;
     detail: WorksiteDayDetailDto;
     namen: SeriesNamen;
   } | null>(null);
+
+  const gehe = useCallback(
+    (ziel: PlanungsUrlEingabe): void => {
+      // scroll: false - ein geoeffneter Drawer darf die Kalenderposition nicht
+      // an den Seitenanfang reissen.
+      router.push(planungsUrl(ziel), { scroll: false });
+    },
+    [router],
+  );
+
+  /** Drawer zu: die Drawer-Parameter fallen weg, der Monat bleibt stehen. */
+  const schliesse = useCallback((): void => gehe({ monat: view.month }), [gehe, view.month]);
+
+  /**
+   * Nach einer Mutation: zurueck auf den Kalender UND die Servertruth neu
+   * holen. `router.refresh()` bleibt ausdruecklich stehen - die Navigation
+   * allein garantiert keinen frischen Serverrender.
+   */
+  const nachAenderung = useCallback((): void => {
+    gehe({ monat: view.month });
+    router.refresh();
+  }, [gehe, router, view.month]);
 
   const grid: MonthGridModel = useMemo(() => buildMonthGrid(view.month), [view.month]);
 
@@ -78,11 +109,18 @@ export function PlanungsAnsicht({ view }: { readonly view: MonthPlanningViewDto 
 
     for (const [datum, karten] of proTag) {
       zahlen[datum] = karten.length;
-      knoten[datum] = <DayCardStack cards={karten} onOpen={setOffenerTag} />;
+      knoten[datum] = (
+        <DayCardStack
+          cards={karten}
+          onOpen={(worksiteDayId) =>
+            gehe({ monat: view.month, tag: datum, drawer: "tag", id: worksiteDayId })
+          }
+        />
+      );
     }
 
     return { cardsByDate: knoten, countsByDate: zahlen };
-  }, [view.cards]);
+  }, [gehe, view.cards, view.month]);
 
   // Die Balken kommen aus denselben Karten wie die Tageskarten: ein Einsatz
   // ist an genau den Tagen geplant, an denen er eine Karte hat.
@@ -106,9 +144,12 @@ export function PlanungsAnsicht({ view }: { readonly view: MonthPlanningViewDto 
     return { spans: segmente, colourByEngagement: farben };
   }, [grid, view.cards]);
 
-  const wechsleMonat = (monat: string) => {
-    router.push(`/planung?monat=${monat}`);
-  };
+  // Ein Monatswechsel laesst den Drawer-Zustand fallen: der adressierte Tag
+  // bzw. Einsatz muss im neuen Monat gar nicht vorkommen.
+  const wechsleMonat = (monat: string) => gehe({ monat });
+
+  const oeffneAnlage = (tag?: LocalDate) =>
+    gehe({ monat: view.month, tag: tag ?? null, drawer: "neu" });
 
   return (
     <div className="flex flex-col gap-4">
@@ -116,7 +157,7 @@ export function PlanungsAnsicht({ view }: { readonly view: MonthPlanningViewDto 
         monat={view.month}
         heute={view.today}
         onNavigate={wechsleMonat}
-        onCreate={() => setDrawerOffen(true)}
+        onCreate={() => oeffneAnlage()}
       />
 
       {view.cards.length === 0 && (
@@ -126,7 +167,7 @@ export function PlanungsAnsicht({ view }: { readonly view: MonthPlanningViewDto 
             Lege den ersten Einsatz an oder waehle einen Tag im Kalender.
           </p>
           <div className="mt-3">
-            <Button onClick={() => setDrawerOffen(true)}>Einsatz anlegen</Button>
+            <Button onClick={() => oeffneAnlage()}>Einsatz anlegen</Button>
           </div>
         </div>
       )}
@@ -139,32 +180,37 @@ export function PlanungsAnsicht({ view }: { readonly view: MonthPlanningViewDto 
         countsByDate={countsByDate}
         spans={spans}
         colourByEngagement={colourByEngagement}
-        onCreateForDate={() => setDrawerOffen(true)}
+        onCreateForDate={(datum) => oeffneAnlage(datum)}
         onMonthChange={(richtung) => wechsleMonat(addMonths(view.month, richtung))}
       />
 
-      {offenerTag !== null && (
+      {viewState.drawer === "tag" && (
         <DayDrawer
-          worksiteDayId={offenerTag}
+          key={viewState.worksiteDayId}
+          worksiteDayId={viewState.worksiteDayId}
           today={view.today}
-          onClose={() => setOffenerTag(null)}
-          onSaved={() => {
-            setOffenerTag(null);
-            router.refresh();
-          }}
-          onShowCosts={(id, titel) => {
-            setOffenerTag(null);
-            setKosten({ id, titel });
-          }}
+          onClose={schliesse}
+          onSaved={nachAenderung}
+          onShowCosts={(engagementId) =>
+            // Der Tageskontext bleibt in der URL stehen: der Kosten-Drawer ist
+            // von diesem Tag aus geoeffnet worden (Produktinvariante 7).
+            gehe({
+              monat: view.month,
+              tag: viewState.tag,
+              drawer: "kosten",
+              id: engagementId,
+            })
+          }
           onSeriesPreview={(entwurf, detail, namen) => setSerie({ entwurf, detail, namen })}
         />
       )}
 
-      {kosten !== null && (
+      {viewState.drawer === "kosten" && (
         <CostDrawer
-          engagementId={kosten.id}
-          engagementTitle={kosten.titel}
-          onClose={() => setKosten(null)}
+          key={viewState.engagementId}
+          engagementId={viewState.engagementId}
+          engagementTitle={viewState.engagementTitle}
+          onClose={schliesse}
         />
       )}
 
@@ -176,20 +222,18 @@ export function PlanungsAnsicht({ view }: { readonly view: MonthPlanningViewDto 
           onClose={() => setSerie(null)}
           onApplied={() => {
             setSerie(null);
-            setOffenerTag(null);
-            router.refresh();
+            nachAenderung();
           }}
         />
       )}
 
-      {drawerOffen && (
+      {viewState.drawer === "neu" && (
         <EngagementDrawer
-          onClose={() => setDrawerOffen(false)}
+          onClose={schliesse}
           onCreated={() => {
-            setDrawerOffen(false);
             // Die Servertruth hat sich geaendert; ohne refresh zeigte der
             // Kalender weiter den Stand von vor der Anlage.
-            router.refresh();
+            nachAenderung();
           }}
         />
       )}

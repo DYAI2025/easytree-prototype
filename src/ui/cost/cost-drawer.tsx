@@ -137,7 +137,11 @@ export function CostDrawer({ engagementId, engagementTitle, onClose }: CostDrawe
 
       {uebersicht !== null && (
         <>
-          <div data-testid="kostenkopf" className="flex flex-col gap-1">
+          <div
+            data-testid="kostenkopf"
+            data-engagement-id={uebersicht.engagementId}
+            className="flex flex-col gap-1"
+          >
             <p className="font-medium">{engagementTitle}</p>
             <p data-testid="kostensumme" className="text-2xl font-semibold">
               {formatEuro(uebersicht.totalMinorUnits)}

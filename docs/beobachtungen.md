@@ -121,7 +121,8 @@ nur EUR kennt - es ist aber keine Entscheidung, sondern eine Luecke.
 
 ## B-05: Der Drawer-Zustand steht nicht in der URL (08.09.2026)
 
-**Status: `OPEN_BY_PRECEDENT`**
+**Status: `CLOSED` (08.09.2026)** - vorher `OPEN_BY_PRECEDENT`. Der Befund bleibt
+unveraendert stehen; die Aufloesung steht darunter.
 
 `CLAUDE.md` nennt als Zustandsvertrag
 `/planung?monat=…&tag=…&drawer=neu|tag|kosten&id=…`. Tatsaechlich steht nur
@@ -140,3 +141,68 @@ Formularzustand lebt in der Drawer-Instanz, der Fachzustand im Server.
 **Naechster Schritt:** entweder den Vertrag in `CLAUDE.md` auf den gebauten
 Stand ziehen oder die URL-Zustaende als eigene Aufgabe nachziehen. Beides ist
 eine Produktentscheidung, keine stille Reparatur.
+
+### Aufloesung (08.09.2026)
+
+Der oben notierte "naechste Schritt" hatte zwei Wege offen gelassen. Nur einer
+war je zulaessig: `CLAUDE.md` ("View state lives in the URL") und Plan 5.6
+("URL ist Zustand … Reload rekonstruiert Ansicht und geoeffneten Drawer aus der
+URL") sagen dasselbe. Zwei uebereinstimmende kanonische Quellen sind keine
+offene Produktentscheidung - der Vertrag stand, die Implementierung fehlte.
+Herunterschreiben des Vertrags war damit ausgeschlossen.
+
+**Ursache:** `PlanungsAnsicht` hielt den offenen Drawer und den adressierten
+Tag/Einsatz in `useState`. Die URL trug nur `monat`. Ein Reload verlor den
+Drawer, und ein Link auf einen Baustellentag existierte nicht.
+
+**Reparatur:** Der Ansichtszustand wandert in die URL und wird SERVERSEITIG
+aufgeloest.
+
+- Neu: `src/ui/calendar/planning-view-state.ts` - pur, ohne Router, Fetch oder
+  React. `planungsUrl()` baut die eine kanonische URL
+  (`/planung?monat=…&tag=…&drawer=…&id=…`, feste Parameterreihenfolge),
+  `resolvePlanungsViewState()` loest sie gegen das bereits geladene
+  `MonthPlanningView` auf.
+- `src/app/planung/page.tsx` ruft die Aufloesung im Serverrender auf. Deshalb
+  steht ein Drawer schon beim Direktaufruf, ohne einen Klick im Client.
+- `src/ui/calendar/planungs-ansicht.tsx` SCHREIBT den Zustand nur noch:
+  Oeffnen und Schliessen sind `router.push(planungsUrl(...), {scroll:false})`.
+  Im React-State bleibt allein der ungespeicherte Serien-Entwurf hinter der
+  Vorschau - der laesst sich aus keiner URL rekonstruieren.
+- `id` gilt nur, wenn das Lesemodell den Baustellentag bzw. den Einsatz im
+  sichtbaren Raster kennt. Damit zeigt ein rekonstruierter Drawer garantiert
+  dieselbe Identitaet; der Titel des Kosten-Drawers kommt aus derselben Quelle
+  statt aus der URL.
+- Unbrauchbarer Zustand ist KEIN fachlicher Fehler: unbekannter `drawer`,
+  fehlende oder unbekannte `id`, Tag ausserhalb des Rasters werden ignoriert,
+  der Kalender steht. Eine erfundene Fehlermeldung waere schlimmer als der
+  stille Rueckfall.
+- Ein Monatswechsel laesst den Drawer-Zustand fallen; Schliessen entfernt nur
+  die Drawer-Parameter und behaelt `monat`.
+- Weiterhin kein `localStorage`/`sessionStorage`.
+
+Nicht angefasst: Datenmodell, API-Vertraege, Kostenrechnung, Tages- und
+Serienrevisionen, der getrennte Serienzaehler aus B-04, OQ-001, H-01…H-07.
+
+**Browser-Evidenz** (Playwright/Chromium gegen den Produktionsbuild und echtes
+PostgreSQL, `e2e/planungs-url-state.spec.ts`):
+
+| Fall | Nachweis |
+| --- | --- |
+| B05-1 | Tageskarte oeffnen schreibt `monat`+`tag`+`drawer=tag`+`id`; nach `reload()` steht derselbe Drawer, `tageskopf` traegt dieselbe `data-worksite-day-id`. |
+| B05-2 | `Kosten anzeigen` schreibt `drawer=kosten`+Einsatz-`id`; nach `reload()` derselbe Einsatz, `kostenkopf` traegt dieselbe `data-engagement-id`. |
+| B05-3 | `Einsatz anlegen` schreibt `drawer=neu`; nach `reload()` steht der Drawer wieder auf Schritt 1 von 3. |
+| B05-4 | Schliessen (Tages- und Einsatzdrawer) entfernt `drawer`/`id`, laesst `monat=2026-09` stehen; nach `reload()` bleibt zu. |
+| B05-5 | `page.goto()` auf einen nie in dieser Page geoeffneten Tages- bzw. Kosten-Link rekonstruiert beide Drawer mit der richtigen ID. |
+| B05-N | Sechs unbrauchbare Zustaende (unbekannter Drawer, `drawer=tag` ohne id, unbekannte ids, `drawer=kosten` ohne id) zeigen den Kalender, keinen Dialog, keine Fehlermeldung; `drawer=neu` mit unbrauchbarem `tag` oeffnet trotzdem sauber. |
+
+Roter Ausgangslauf auf `cb40be1`: B05-1/2/3 scheiterten an `drawer` = `null`,
+B05-5 fand nach `goto()` gar keinen Drawer.
+
+**Gegenmutation:** `page.tsx` gibt statt `resolvePlanungsViewState(view, params)`
+ein festes `KEIN_DRAWER` weiter - die URL wird weiter geschrieben, nur die
+Rekonstruktion faellt weg. Der Build kompiliert (`✓ Compiled successfully`), und
+genau die Reload- und Direktlink-Faelle werden echt rot: 6 von 7 Tests
+scheitern, uebrig bleibt nur der Negativpfad, der ohnehin keinen Drawer
+erwartet. Mutation vollstaendig zurueckgenommen (`diff` gegen die Kopie vor der
+Mutation ist leer).

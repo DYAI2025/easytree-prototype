@@ -6,6 +6,7 @@ import { getDb } from "../../server/db/connection";
 import { monthPlanningView } from "../../server/queries/month-planning-view";
 import { resolveTenant } from "../../server/tenant/tenant-context";
 import { PlanungsAnsicht } from "../../ui/calendar/planungs-ansicht";
+import { resolvePlanungsViewState } from "../../ui/calendar/planning-view-state";
 
 const MONAT_MUSTER = /^\d{4}-(0[1-9]|1[0-2])$/;
 
@@ -17,8 +18,12 @@ const MONAT_MUSTER = /^\d{4}-(0[1-9]|1[0-2])$/;
  * eigene Route noch einmal ausfuehren. Die API existiert fuer Clients, nicht
  * fuer den eigenen Server.
  *
- * Die URL ist der Monatszustand: fehlt oder taugt `monat` nicht, wird auf den
- * aktuellen Monat umgeleitet, damit jede Ansicht teilbar bleibt.
+ * Die URL ist der Ansichtszustand - nicht nur der Monat: `monat`, `tag`,
+ * `drawer` und `id` werden hier gegen das gerade geladene Lesemodell
+ * aufgeloest (Plan 5.6). Deshalb rekonstruiert schon der Serverrender einen
+ * offenen Drawer, und ein Direktaufruf braucht keinen Klick im Client.
+ * Fehlt oder taugt `monat` nicht, wird auf den aktuellen Monat umgeleitet,
+ * damit jede Ansicht teilbar bleibt.
  */
 export default async function PlanungPage({
   searchParams,
@@ -34,7 +39,9 @@ export default async function PlanungPage({
     redirect(`/planung?monat=${clock.todayLocal(tenant.timeZone).slice(0, 7)}`);
   }
 
-  const view = await monthPlanningView({ db: getDb().db, tenant, clock }, roh);
+  const view = MonthPlanningViewSchema.parse(
+    await monthPlanningView({ db: getDb().db, tenant, clock }, roh),
+  );
 
-  return <PlanungsAnsicht view={MonthPlanningViewSchema.parse(view)} />;
+  return <PlanungsAnsicht view={view} viewState={resolvePlanungsViewState(view, params)} />;
 }

@@ -240,7 +240,14 @@ export function DayDrawer({
 
       {detail !== null && entwurf !== null && (
         <>
-          <div data-testid="tageskopf" className="flex flex-col gap-1">
+          <div
+            data-testid="tageskopf"
+            // Die Identitaet des Baustellentags steht im DOM, damit ein Test die
+            // aus der URL rekonstruierte Ansicht gegen die Server-ID pruefen
+            // kann statt nur gegen Titel und Datum (B-05).
+            data-worksite-day-id={detail.worksiteDayId}
+            className="flex flex-col gap-1"
+          >
             <p className="font-medium">{formatiereDatumLang(parseLocalDate(detail.localDate))}</p>
             <p>
               <span
