@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import { MAX_VISIBLE_CARDS_PER_DAY } from "../../domain/month-grid";
 
 export interface DayCardModel {
@@ -70,33 +72,43 @@ export function DayCard({
 
 /**
  * Mehrere Einsaetze am selben Tag stapeln untereinander. Ab der vierten Karte
- * fasst ein Button zusammen, damit die Zelle nicht unbegrenzt waechst.
+ * fasst ein Disclosure-Button zusammen, damit die Zelle nicht unbegrenzt
+ * waechst.
+ *
+ * Der Button MUSS aufklappen. Vorher war er ein Knopf ohne Handler: die
+ * vierte und jede weitere Karte stand gar nicht im DOM und war ueber die
+ * Oberflaeche nicht erreichbar (Befund B-02). Ein Control, das nichts tut,
+ * ist schlimmer als keins - es behauptet einen Weg, den es nicht gibt.
+ *
+ * Bewusst kein Dialog und kein Popover: das Aufklappen an Ort und Stelle
+ * braucht keinen zweiten Fokuskontext und keine neue Architektur.
  */
 export function DayCardStack({
   cards,
   onOpen,
-  onMore,
 }: {
   readonly cards: readonly DayCardModel[];
   readonly onOpen: (worksiteDayId: string) => void;
-  readonly onMore: () => void;
 }) {
-  const sichtbar = cards.slice(0, MAX_VISIBLE_CARDS_PER_DAY);
-  const weitere = cards.length - sichtbar.length;
+  const [aufgeklappt, setAufgeklappt] = useState(false);
+
+  const versteckt = cards.length - MAX_VISIBLE_CARDS_PER_DAY;
+  const sichtbar = aufgeklappt ? cards : cards.slice(0, MAX_VISIBLE_CARDS_PER_DAY);
 
   return (
     <span className="mt-1 flex flex-col gap-1">
       {sichtbar.map((card) => (
         <DayCard key={card.worksiteDayId} card={card} onOpen={onOpen} />
       ))}
-      {weitere > 0 && (
+      {versteckt > 0 && (
         <button
           type="button"
           data-testid="mehr-karten"
-          onClick={onMore}
+          aria-expanded={aufgeklappt}
+          onClick={() => setAufgeklappt((offen) => !offen)}
           className="rounded border border-line px-1 text-xs text-ink-muted"
         >
-          {`+${weitere} weitere`}
+          {aufgeklappt ? "Weniger anzeigen" : `+${versteckt} weitere`}
         </button>
       )}
     </span>

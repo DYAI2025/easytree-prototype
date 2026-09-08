@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildMonthGrid } from "../../domain/month-grid";
 import { parseLocalDate } from "../../domain/local-date";
 import { MonthGrid } from "./month-grid";
+import { DayCardStack } from "./day-card";
 
 afterEach(cleanup);
 
@@ -222,5 +223,72 @@ describe("MonthGrid: Aktionen und Barrierefreiheit", () => {
     });
 
     expect(ergebnis.violations.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
+  });
+});
+
+describe("MonthGrid Tastatur in der Zelle", () => {
+  it("laesst Enter an ein Element IN der Zelle durch, statt es abzufangen", async () => {
+    const user = userEvent.setup();
+    const onCreateForDate = vi.fn();
+    const onOpen = vi.fn();
+
+    const { container } = render(
+      <MonthGrid
+        grid={buildMonthGrid("2026-09")}
+        today={parseLocalDate("2026-09-01")}
+        labelledBy="titel"
+        onCreateForDate={onCreateForDate}
+        onMonthChange={() => {}}
+        cardsByDate={{
+          "2026-09-07": (
+            <DayCardStack
+              cards={[
+                {
+                  worksiteDayId: "wd-1",
+                  engagementId: "eng-1",
+                  title: "Baumpflege",
+                  worksiteName: "Nordring",
+                  colourKey: "moos",
+                  employeeCount: 1,
+                  resourceCount: 0,
+                },
+              ]}
+              onOpen={onOpen}
+            />
+          ),
+        }}
+      />,
+    );
+
+    const karte = container.querySelector<HTMLButtonElement>('[data-testid="tageskarte"]')!;
+
+    karte.focus();
+    await user.keyboard("{Enter}");
+
+    // Der Zellenhandler darf nur reagieren, wenn die ZELLE selbst den Fokus
+    // hat. Sonst verschluckt sein preventDefault die Aktivierung jedes
+    // Knopfs in der Zelle - gemessen im Browser an "+n weitere".
+    expect(onOpen).toHaveBeenCalledExactlyOnceWith("wd-1");
+    expect(onCreateForDate).not.toHaveBeenCalled();
+  });
+
+  it("reagiert weiterhin, wenn die Zelle selbst den Fokus hat", async () => {
+    const user = userEvent.setup();
+    const onCreateForDate = vi.fn();
+
+    const { container } = render(
+      <MonthGrid
+        grid={buildMonthGrid("2026-09")}
+        today={parseLocalDate("2026-09-01")}
+        labelledBy="titel"
+        onCreateForDate={onCreateForDate}
+        onMonthChange={() => {}}
+      />,
+    );
+
+    container.querySelector<HTMLElement>('[role="gridcell"][data-datum="2026-09-07"]')!.focus();
+    await user.keyboard("{Enter}");
+
+    expect(onCreateForDate).toHaveBeenCalledExactlyOnceWith("2026-09-07");
   });
 });

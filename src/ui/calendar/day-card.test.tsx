@@ -86,9 +86,7 @@ describe("DayCardStack", () => {
     );
 
   it("stapelt zwei Einsaetze am selben Tag mit unterschiedlicher Farbklasse", () => {
-    const { container } = render(
-      <DayCardStack cards={viele(2)} onOpen={() => {}} onMore={() => {}} />,
-    );
+    const { container } = render(<DayCardStack cards={viele(2)} onOpen={() => {}} />);
     const karten = [...container.querySelectorAll('[data-testid="tageskarte"]')];
 
     expect(karten).toHaveLength(2);
@@ -96,26 +94,78 @@ describe("DayCardStack", () => {
     expect(new Set(farben).size).toBe(2);
   });
 
-  it("zeigt ab der vierten Karte einen Button plus n weitere", async () => {
-    const user = userEvent.setup();
-    const onMore = vi.fn();
-    const { container } = render(
-      <DayCardStack cards={viele(5)} onOpen={() => {}} onMore={onMore} />,
-    );
+  it("zeigt ab der vierten Karte einen Button plus n weitere", () => {
+    const { container } = render(<DayCardStack cards={viele(5)} onOpen={() => {}} />);
 
     expect(container.querySelectorAll('[data-testid="tageskarte"]')).toHaveLength(3);
 
     const mehr = container.querySelector<HTMLButtonElement>('[data-testid="mehr-karten"]');
-    expect(mehr?.textContent).toBe("+2 weitere");
 
-    await user.click(mehr!);
-    expect(onMore).toHaveBeenCalledOnce();
+    expect(mehr?.textContent).toBe("+2 weitere");
+    // Der Button ist ein Disclosure-Control und sagt seinen Zustand an.
+    expect(mehr?.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("macht mit der Maus alle Karten des Tages sichtbar", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<DayCardStack cards={viele(5)} onOpen={() => {}} />);
+
+    await user.click(container.querySelector<HTMLButtonElement>('[data-testid="mehr-karten"]')!);
+
+    expect(container.querySelectorAll('[data-testid="tageskarte"]')).toHaveLength(5);
+
+    const mehr = container.querySelector<HTMLButtonElement>('[data-testid="mehr-karten"]');
+
+    expect(mehr?.getAttribute("aria-expanded")).toBe("true");
+    expect(mehr?.textContent).toBe("Weniger anzeigen");
+  });
+
+  it("macht mit der Tastatur alle Karten des Tages sichtbar", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<DayCardStack cards={viele(5)} onOpen={() => {}} />);
+
+    container.querySelector<HTMLButtonElement>('[data-testid="mehr-karten"]')!.focus();
+    await user.keyboard("{Enter}");
+
+    expect(container.querySelectorAll('[data-testid="tageskarte"]')).toHaveLength(5);
+  });
+
+  it("macht die zuvor versteckte vierte Karte erreichbar und bedienbar", async () => {
+    const user = userEvent.setup();
+    const onOpen = vi.fn();
+    const { container } = render(<DayCardStack cards={viele(5)} onOpen={onOpen} />);
+
+    // Vor dem Aufklappen existiert die vierte Karte gar nicht im DOM - genau
+    // das war der Befund B-02: ein Knopf ohne Wirkung.
+    expect(container.querySelector('[data-worksite-day-id="wd-3"]')).toBeNull();
+
+    await user.click(container.querySelector<HTMLButtonElement>('[data-testid="mehr-karten"]')!);
+
+    const vierte = container.querySelector<HTMLButtonElement>('[data-worksite-day-id="wd-3"]');
+
+    expect(vierte).not.toBeNull();
+
+    vierte!.focus();
+    expect(document.activeElement).toBe(vierte);
+
+    await user.keyboard("{Enter}");
+    expect(onOpen).toHaveBeenCalledExactlyOnceWith("wd-3");
+  });
+
+  it("klappt wieder zu", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<DayCardStack cards={viele(5)} onOpen={() => {}} />);
+    const mehr = () => container.querySelector<HTMLButtonElement>('[data-testid="mehr-karten"]')!;
+
+    await user.click(mehr());
+    await user.click(mehr());
+
+    expect(container.querySelectorAll('[data-testid="tageskarte"]')).toHaveLength(3);
+    expect(mehr().getAttribute("aria-expanded")).toBe("false");
   });
 
   it("zeigt keinen Mehr-Button bei genau drei Karten", () => {
-    const { container } = render(
-      <DayCardStack cards={viele(3)} onOpen={() => {}} onMore={() => {}} />,
-    );
+    const { container } = render(<DayCardStack cards={viele(3)} onOpen={() => {}} />);
 
     expect(container.querySelectorAll('[data-testid="tageskarte"]')).toHaveLength(3);
     expect(container.querySelector('[data-testid="mehr-karten"]')).toBeNull();

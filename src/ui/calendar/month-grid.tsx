@@ -82,6 +82,19 @@ export function MonthGrid({
 
   const handleKey = useCallback(
     (event: KeyboardEvent<HTMLDivElement>, datum: LocalDate) => {
+      /*
+       * Nur reagieren, wenn die ZELLE selbst den Fokus hat.
+       *
+       * Ohne diese Schranke verschluckt das preventDefault unten die
+       * Aktivierung jedes Knopfs in der Zelle: im Browser war der
+       * Disclosure-Button "+n weitere" per Tastatur nicht bedienbar, weil
+       * sein Enter hier abgefangen und stattdessen die Einsatzanlage
+       * ausgeloest wurde. Dasselbe galt fuer jede Tageskarte.
+       */
+      if (event.target !== event.currentTarget) {
+        return;
+      }
+
       const index = flach.indexOf(datum);
       const spalte = index % TAGE_PRO_WOCHE;
 

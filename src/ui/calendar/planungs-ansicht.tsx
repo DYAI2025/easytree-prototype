@@ -52,7 +52,7 @@ export function PlanungsAnsicht({ view }: { readonly view: MonthPlanningViewDto 
 
     for (const [datum, karten] of proTag) {
       zahlen[datum] = karten.length;
-      knoten[datum] = <DayCardStack cards={karten} onOpen={() => {}} onMore={() => {}} />;
+      knoten[datum] = <DayCardStack cards={karten} onOpen={() => {}} />;
     }
 
     return { cardsByDate: knoten, countsByDate: zahlen };

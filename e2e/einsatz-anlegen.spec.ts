@@ -99,19 +99,52 @@ test.describe("einsatz-anlegen", () => {
     }
   });
 
-  test("AC-05: zugeordnete Personen und Ressourcen ueberleben einen Reload", async ({ page }) => {
-    const titel = `${TITEL_BASIS} AC-05`;
-    const dialog = await einsatzAnlegen(page, { start: "2026-09-21", ende: "2026-10-02", titel });
+  test("AC-05a: Zuordnung und Ids ueberleben einen Reload (Servertruth)", async ({
+    page,
+    request,
+  }) => {
+    const titel = `${TITEL_BASIS} AC-05a`;
+
+    // Die Auswahl wird NAMENTLICH getroffen und die Zusicherung prueft
+    // anschliessend genau diese Ids. Nur "zwei Stueck" zu zaehlen wuerde auch
+    // dann gruen bleiben, wenn der Server zwei ANDERE Personen gespeichert
+    // haette.
+    const leute = (await (await request.get("/api/mitarbeitende")).json()) as {
+      items: { id: string; displayName: string }[];
+    };
+    const geraete = (await (await request.get("/api/ressourcen")).json()) as {
+      items: { id: string; name: string }[];
+    };
+    const erwartetePersonen = leute.items.slice(0, 2);
+    const erwarteteMittel = geraete.items.slice(0, 2);
+
+    expect(erwartetePersonen).toHaveLength(2);
+    expect(erwarteteMittel).toHaveLength(2);
+
+    // Eigener, sonst unbelegter Zeitraum: liegen an einem Tag vier Karten,
+    // steckt die vierte hinter dem Disclosure und die Zusicherung wuerde am
+    // Ueberlauf scheitern statt an der Sache.
+    const dialog = await einsatzAnlegen(page, {
+      start: "2026-11-16",
+      ende: "2026-11-20",
+      titel,
+    });
 
     await dialog.getByRole("button", { name: "Weiter" }).click();
 
-    const personen = dialog.getByTestId("mitarbeitende").getByRole("checkbox");
-    const mittel = dialog.getByTestId("ressourcen").getByRole("checkbox");
+    for (const person of erwartetePersonen) {
+      await dialog
+        .getByTestId("mitarbeitende")
+        .getByRole("checkbox", { name: new RegExp(person.displayName) })
+        .check();
+    }
 
-    await personen.nth(0).check();
-    await personen.nth(1).check();
-    await mittel.nth(0).check();
-    await mittel.nth(1).check();
+    for (const mittel of erwarteteMittel) {
+      await dialog
+        .getByTestId("ressourcen")
+        .getByRole("checkbox", { name: new RegExp(mittel.name) })
+        .check();
+    }
 
     await expect(dialog.getByTestId("auswahlzaehler")).toContainText("2 Personen");
     await expect(dialog.getByTestId("auswahlzaehler")).toContainText("2 Ressourcen");
@@ -119,35 +152,77 @@ test.describe("einsatz-anlegen", () => {
     await dialog.getByRole("button", { name: "Einsatz anlegen" }).click();
     await expect(page.getByRole("dialog")).toBeHidden();
 
-    const karte = page
-      .locator(`[role="gridcell"][data-datum="2026-09-21"]`)
-      .getByTestId("tageskarte")
-      .filter({ hasText: titel });
+    await page.goto(LEERER_MONAT);
 
-    await expect(karte).toContainText("2 Personen");
-    await expect(karte).toContainText("2 Ressourcen");
+    const karten = page.getByTestId("tageskarte").filter({ hasText: titel });
+
+    await expect(karten).toHaveCount(5);
+
+    const idsVorher = await karten.evaluateAll((els) =>
+      els.map((el) => ({
+        einsatz: el.getAttribute("data-engagement-id"),
+        tag: el.getAttribute("data-worksite-day-id"),
+      })),
+    );
+
+    expect(idsVorher.every((eintrag) => /^[0-9a-f-]{36}$/.test(eintrag.einsatz ?? ""))).toBe(true);
+    expect(idsVorher.every((eintrag) => /^[0-9a-f-]{36}$/.test(eintrag.tag ?? ""))).toBe(true);
+    expect(new Set(idsVorher.map((eintrag) => eintrag.einsatz)).size).toBe(1);
 
     await page.reload();
 
-    const nachReload = page
-      .locator(`[role="gridcell"][data-datum="2026-09-21"]`)
-      .getByTestId("tageskarte")
-      .filter({ hasText: titel });
+    const nachReload = page.getByTestId("tageskarte").filter({ hasText: titel });
 
-    await expect(nachReload).toContainText("2 Personen");
-    await expect(nachReload).toContainText("2 Ressourcen");
+    await expect(nachReload).toHaveCount(5);
+
+    const idsNachher = await nachReload.evaluateAll((els) =>
+      els.map((el) => ({
+        einsatz: el.getAttribute("data-engagement-id"),
+        tag: el.getAttribute("data-worksite-day-id"),
+      })),
+    );
+
+    expect(idsNachher).toEqual(idsVorher);
+
+    // Servertruth: die persistierte Zuordnung, nicht der Kartenzaehler.
+    for (const eintrag of idsNachher) {
+      const antwort = await request.get(`/api/baustellentage/${eintrag.tag}`);
+
+      expect(antwort.status()).toBe(200);
+
+      const tag = (await antwort.json()) as {
+        engagementId: string;
+        employees: { id: string }[];
+        resources: { id: string }[];
+      };
+
+      expect(tag.engagementId).toBe(idsNachher[0]!.einsatz);
+      expect(tag.employees.map((e) => e.id).sort()).toEqual(
+        erwartetePersonen.map((p) => p.id).sort(),
+      );
+      expect(tag.resources.map((r) => r.id).sort()).toEqual(
+        erwarteteMittel.map((r) => r.id).sort(),
+      );
+    }
   });
 
   /*
-   * Der zweite Teil von AC-05 - dieselbe Auswahl NOCH EINMAL im Tagesdrawer
-   * sehen - braucht einen Tagesdrawer, den es noch nicht gibt. Das ist neue
-   * Implementierung und nicht die in TASK-037 erlaubte Verdrahtungsluecke,
-   * deshalb steht der Fall hier sichtbar offen statt still zu fehlen. Der
-   * Persistenznachweis selbst steckt bereits im Test darueber: nach dem
-   * Reload steht "2 Personen / 2 Ressourcen" auf der Karte, und die kommt
-   * aus der Datenbank.
+   * AC-05b: DEFERRED_DUE_TO_PLAN_DEPENDENCY_CONTRADICTION
+   *
+   * Der Plan verlangt in TASK-037, die Auswahl nach dem Reload "im
+   * Tagesdrawer" wiederzusehen. Den Tagesdrawer baut derselbe Plan aber erst
+   * in TASK-043. Das ist ein Widerspruch in der Aufgabenreihenfolge, kein
+   * Fehler des Produktcodes und keine offene Human-Entscheidung.
+   *
+   * Neu geschnitten:
+   *   AC-05a (oben, gruen) - die Persistenz selbst, gegen die Servertruth
+   *                          aus /api/baustellentage geprueft.
+   *   AC-05b (hier)        - dieselbe Auswahl im Tagesdrawer, faellig mit
+   *                          TASK-043/045.
+   *
+   * Dieser Fall gilt ausdruecklich NICHT als bestanden.
    */
-  test.fixme("AC-05 (Rest): der Tagesdrawer zeigt die Auswahl erneut", async ({ page }) => {
+  test.fixme("AC-05b: der Tagesdrawer zeigt dieselbe Auswahl erneut", async ({ page }) => {
     await page.goto(PLANUNG);
     await page.getByTestId("tageskarte").first().click();
 
