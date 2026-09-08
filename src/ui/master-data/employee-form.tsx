@@ -21,7 +21,11 @@ import { Button } from "../primitives/button";
  */
 
 /** `250,00` -> `25000`. Ohne Gleitkomma: 0.1 + 0.2 ist nicht 0.3. */
-const SATZ_MUSTER = /^\d{1,15}(?:[.,]\d{1,2})?$/;
+export const SATZ_MUSTER = /^\d{1,15}(?:[.,]\d{1,2})?$/;
+
+/** Dieselbe Erklaerung an jedem Satzfeld - Mitarbeitende wie Ressourcen. */
+export const SATZ_HINWEIS =
+  "Euro je Baustellentag, z. B. 250,00. Leer lassen, wenn kein Satz hinterlegt ist - das Feld bleibt dann leer und wird nicht als 0 gerechnet. Demo-Kostengrundlage, keine Verguetung.";
 
 export function parseTagessatz(eingabe: string): string | undefined {
   const roh = eingabe.trim();
@@ -162,8 +166,7 @@ export function EmployeeForm({ employee, onSaved, onCancel }: EmployeeFormProps)
           className="rounded border border-line bg-surface p-2"
         />
         <p id={satzHinweisId} className="text-ink-muted">
-          Euro je Baustellentag, z. B. 250,00. Leer lassen, wenn kein Satz hinterlegt ist - das Feld
-          bleibt dann leer und wird nicht als 0 gerechnet. Demo-Kostengrundlage, keine Verguetung.
+          {SATZ_HINWEIS}
         </p>
         {satzFehler !== undefined && (
           <p role="alert" className="text-danger-text">
@@ -243,7 +246,9 @@ export function EmployeeAdmin({ employees }: EmployeeAdminProps) {
               ) : (
                 <div className="flex items-center justify-between gap-3">
                   <span>
-                    <span className="font-medium">{person.displayName}</span>
+                    <span data-testid="mitarbeitendenname" className="font-medium">
+                      {person.displayName}
+                    </span>
                     {person.roleLabel !== null && (
                       <span className="text-ink-muted"> · {person.roleLabel}</span>
                     )}

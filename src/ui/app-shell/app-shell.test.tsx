@@ -1,4 +1,4 @@
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import axe from "axe-core";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -54,6 +54,25 @@ describe("AppShell", () => {
     const hrefs = [...container.querySelectorAll("nav a")].map((a) => a.getAttribute("href"));
 
     expect(hrefs).toEqual(["/planung", "/mitarbeitende", "/ressourcen", "/auftraggeber"]);
+  });
+
+  /*
+   * REQ-F-012 verlangt ausdruecklich "Navigation Mitarbeitende GETRENNT von
+   * Ressourcen". Der href-Test darueber prueft die Liste als Ganzes; dieser
+   * Test prueft die eine Eigenschaft, die dabei verloren gehen koennte: zwei
+   * eigene Ziele mit eigenen Beschriftungen, nicht ein zusammengefasster
+   * Punkt "Stammdaten".
+   */
+  it("fuehrt Mitarbeitende und Ressourcen als getrennte Navigationsziele", () => {
+    render(<AppShell>Inhalt</AppShell>);
+
+    const navigation = screen.getByRole("navigation", { name: "Hauptnavigation" });
+    const mitarbeitende = within(navigation).getByRole("link", { name: "Mitarbeitende" });
+    const ressourcen = within(navigation).getByRole("link", { name: "Ressourcen" });
+
+    expect(mitarbeitende).not.toBe(ressourcen);
+    expect(mitarbeitende.getAttribute("href")).toBe("/mitarbeitende");
+    expect(ressourcen.getAttribute("href")).toBe("/ressourcen");
   });
 
   it("meldet 0 axe-Violations", async () => {
