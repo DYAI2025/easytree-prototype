@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Locator, type Page } from "@playwright/test";
 
 /**
  * EYT-176 / UX-073 - Mobile Bedienflaechen auf Mindestzielgroesse.
@@ -1315,6 +1315,434 @@ test.describe("EYT-176 Ressourcenliste", () => {
 
         expect(aufgeraeumt.status()).toBe(200);
       }
+    });
+  }
+});
+
+/* ---------------------------------------------------------------------------
+ * EYT-176 F1/F2 - ein GUELTIGER langer Ressourcenname in den Planungsflaechen.
+ *
+ * Der Live-Chrome-Retest EYT-176-LIVE-RETEST-02 hat zwei Flaechen gefunden, an
+ * denen derselbe Name, den `/ressourcen` inzwischen vertraegt, weiterhin die
+ * Breite sprengt: der Tagesdrawer und Schritt 3 des Einsatzassistenten.
+ * Gemessen wurde dort dialog.scrollWidth 551 gegen clientWidth 374 (375 px),
+ * 324 (325 px) und 319 (320 px) - immer dieselben 551, denn eine
+ * min-content-Breite haengt nicht am Viewport.
+ *
+ * Warum das DOKUMENT dabei gruen blieb und der bestehende 320-px-Reflowtest den
+ * Befund nicht sah: `Dialog.Content` traegt `overflow-y-auto`. Ist eine der
+ * beiden Achsen nicht `visible`, rechnet CSS die andere von `visible` auf
+ * `auto` - der Drawer scrollt also selbst horizontal und haelt den Ueberlauf
+ * vom Dokument fern. Ein Reflowtest auf `documentElement` ist in einem Dialog
+ * strukturell blind; deshalb misst dieser Block JEDE Scrollflaeche zwischen
+ * Zeile und Dialog einzeln.
+ * ------------------------------------------------------------------------- */
+
+interface Zeilenmass {
+  /** Wie viele Zeilen den gesuchten Namen tragen - 1 ist die einzige richtige Antwort. */
+  readonly anzahl: number;
+  /** Wie viele Ressourcenzeilen die Flaeche ueberhaupt zeigt. */
+  readonly zeilenGesamt: number;
+  readonly text: string;
+  readonly dokScrollWidth: number;
+  readonly dokClientWidth: number;
+  readonly dialogScrollWidth: number;
+  readonly dialogClientWidth: number;
+  readonly inhaltsRechts: number;
+  readonly zeileRechts: number;
+  readonly zeileBreite: number;
+  readonly zeileHoehe: number;
+  readonly kaestchenBreite: number;
+  readonly kaestchenHoehe: number;
+  readonly nameRechts: number;
+  readonly nameBreite: number;
+  readonly nameHoehe: number;
+  /** Wohin die vier Ecken und die Mitte der Zeile wirklich treffen. */
+  readonly treffer: readonly string[];
+  /** Scrollflaechen zwischen Zeile und Dialog, die horizontal ueberlaufen. */
+  readonly scrollflaechen: readonly string[];
+}
+
+/**
+ * Misst die Ressourcenzeile mit dem gesuchten Namen innerhalb ihres Dialogs.
+ *
+ * Der Name ist vor der Reparatur ein nackter Textknoten im Label und hat
+ * deshalb gar kein Element, das man messen koennte. Ein `Range` ab hinter der
+ * Checkbox misst ihn trotzdem - und misst nach der Reparatur unveraendert
+ * dasselbe, wenn dort ein `<span>` steht. So vergleicht der Gegenversuch in
+ * Phase 7 wirklich dieselbe Groesse und nicht zwei verschiedene Messverfahren.
+ */
+async function ressourcenzeile(page: Page, name: string): Promise<Zeilenmass> {
+  return page.evaluate((gesucht) => {
+    const alleZeilen = Array.from(document.querySelectorAll("label")).filter(
+      (label) =>
+        label.querySelector('input[type="checkbox"]') !== null &&
+        label.closest('[role="dialog"]') !== null,
+    );
+    const treffer = alleZeilen.filter((label) => (label.textContent ?? "").includes(gesucht));
+    const zeile = treffer[0];
+
+    if (zeile === undefined) {
+      throw new Error(
+        `Keine Ressourcenzeile mit "${gesucht}" im Dialog. Gefunden: ${alleZeilen.length} Zeilen.`,
+      );
+    }
+
+    const dialog = zeile.closest('[role="dialog"]');
+
+    if (dialog === null) {
+      throw new Error("Zeile liegt nicht in einem Dialog.");
+    }
+
+    zeile.scrollIntoView({ block: "center", inline: "nearest" });
+
+    const kaestchen = zeile.querySelector('input[type="checkbox"]');
+
+    if (kaestchen === null) {
+      throw new Error("Zeile ohne Checkbox.");
+    }
+
+    const bereich = document.createRange();
+
+    bereich.selectNodeContents(zeile);
+    bereich.setStartAfter(kaestchen);
+
+    const zeilenKasten = zeile.getBoundingClientRect();
+    const dialogKasten = dialog.getBoundingClientRect();
+    const kaestchenKasten = kaestchen.getBoundingClientRect();
+    const nameKasten = bereich.getBoundingClientRect();
+
+    const punkte: readonly [number, number][] = [
+      [zeilenKasten.x + 2, zeilenKasten.y + 2],
+      [zeilenKasten.right - 2, zeilenKasten.y + 2],
+      [zeilenKasten.x + 2, zeilenKasten.bottom - 2],
+      [zeilenKasten.right - 2, zeilenKasten.bottom - 2],
+      [zeilenKasten.x + zeilenKasten.width / 2, zeilenKasten.y + zeilenKasten.height / 2],
+    ];
+
+    /*
+     * Jede Scrollflaeche zwischen Zeile und Dialog einzeln. Der Dialog selbst
+     * ist eine davon; ein zwischengeschobener Container mit eigenem
+     * `overflow` waere sonst der naechste blinde Fleck.
+     */
+    const scrollflaechen: string[] = [];
+
+    for (let el: Element | null = zeile; el !== null; el = el.parentElement) {
+      const stil = getComputedStyle(el);
+
+      if (stil.overflowX !== "visible" && el.scrollWidth > el.clientWidth + 0.5) {
+        scrollflaechen.push(
+          `${el.tagName.toLowerCase()}[overflow-x:${stil.overflowX}] ${el.scrollWidth}>${el.clientWidth}`,
+        );
+      }
+
+      if (el === dialog) {
+        break;
+      }
+    }
+
+    return {
+      anzahl: treffer.length,
+      zeilenGesamt: alleZeilen.length,
+      text: (zeile.textContent ?? "").trim(),
+      dokScrollWidth: document.documentElement.scrollWidth,
+      dokClientWidth: document.documentElement.clientWidth,
+      dialogScrollWidth: dialog.scrollWidth,
+      dialogClientWidth: dialog.clientWidth,
+      // Die INHALTSkante, nicht die Randkante: eine sichtbare Bildlaufleiste
+      // gehoert nicht zur nutzbaren Breite.
+      inhaltsRechts: dialogKasten.left + dialog.clientWidth,
+      zeileRechts: zeilenKasten.right,
+      zeileBreite: zeilenKasten.width,
+      zeileHoehe: zeilenKasten.height,
+      kaestchenBreite: kaestchenKasten.width,
+      kaestchenHoehe: kaestchenKasten.height,
+      nameRechts: nameKasten.right,
+      nameBreite: nameKasten.width,
+      nameHoehe: nameKasten.height,
+      treffer: punkte.map(([x, y]) => {
+        const getroffen = document.elementFromPoint(x, y);
+
+        if (getroffen === null) {
+          return "leer";
+        }
+
+        return getroffen === zeile || zeile.contains(getroffen)
+          ? "selbst"
+          : getroffen.tagName.toLowerCase();
+      }),
+      scrollflaechen: [...new Set(scrollflaechen)],
+    };
+  }, name);
+}
+
+/** Ein Satz, der alle Zusicherungen dieser Flaeche in einem Vergleich buendelt. */
+function zeilenbefund(mass: Zeilenmass): string {
+  return [
+    mass.dokScrollWidth <= mass.dokClientWidth
+      ? "dokument ok"
+      : `dokument ueber ${mass.dokScrollWidth}>${mass.dokClientWidth}`,
+    mass.dialogScrollWidth <= mass.dialogClientWidth
+      ? "dialog ok"
+      : `dialog ueber ${mass.dialogScrollWidth}>${mass.dialogClientWidth}`,
+    mass.scrollflaechen.length === 0
+      ? "scrollflaechen ok"
+      : `scrollflaechen ${mass.scrollflaechen.join(" / ")}`,
+    mass.zeileRechts <= mass.inhaltsRechts + 0.5
+      ? "zeile ok"
+      : `zeile ueber ${mass.zeileRechts.toFixed(1)}>${mass.inhaltsRechts.toFixed(1)}`,
+    mass.nameRechts <= mass.inhaltsRechts + 0.5 && mass.nameBreite > 0 && mass.nameHoehe > 0
+      ? "name ok"
+      : `name ${mass.nameBreite.toFixed(1)}x${mass.nameHoehe.toFixed(1)} rechts ${mass.nameRechts.toFixed(1)}>${mass.inhaltsRechts.toFixed(1)}`,
+    mass.zeileHoehe >= MINDESTZIEL ? "hoehe ok" : `hoehe ${mass.zeileHoehe.toFixed(1)}`,
+    mass.zeileBreite >= MINDESTZIEL ? "breite ok" : `breite ${mass.zeileBreite.toFixed(1)}`,
+    mass.treffer.every((t) => t === "selbst") ? "treffer ok" : `treffer ${mass.treffer.join(",")}`,
+    mass.kaestchenBreite >= 10 && mass.kaestchenHoehe >= 10
+      ? "kaestchen ok"
+      : `kaestchen ${mass.kaestchenBreite.toFixed(1)}x${mass.kaestchenHoehe.toFixed(1)}`,
+  ].join(" | ");
+}
+
+const BEFUND_OK =
+  "dokument ok | dialog ok | scrollflaechen ok | zeile ok | name ok | hoehe ok | breite ok | treffer ok | kaestchen ok";
+
+/**
+ * Legt eine Ressource ueber die Route an, die auch das Stammdatenformular
+ * benutzt, und raeumt sie danach auf einen kurzen, stillgelegten Namen zurueck.
+ *
+ * `/api/ressourcen` kennt kein DELETE, und alle Specs teilen eine Datenbank -
+ * ohne dieses Aufraeumen faende die naechste Spec eine fremde lange Zeile vor.
+ */
+async function mitLangerRessource(
+  request: APIRequestContext,
+  name: string,
+  lauf: (id: string) => Promise<void>,
+): Promise<void> {
+  const angelegt = await request.post("/api/ressourcen", {
+    data: { kind: "equipment", name, active: true },
+  });
+
+  expect(angelegt.status()).toBe(201);
+
+  const id = ((await angelegt.json()) as { id: string }).id;
+
+  try {
+    await lauf(id);
+  } finally {
+    const aufgeraeumt = await request.patch(`/api/ressourcen/${id}`, {
+      data: { kind: "equipment", name: `EYT-176 Restposten ${id.slice(0, 8)}`, active: false },
+    });
+
+    expect(aufgeraeumt.status()).toBe(200);
+  }
+}
+
+/**
+ * Bedienprobe der jetzt umbrechenden Zeile (EYT-176, Phase 6).
+ *
+ * Drei Fragen, drei Messungen statt einer Behauptung: trifft ein Klick weit
+ * neben der 13x13 grossen Checkbox noch diese Zeile, bleibt dabei GENAU eine
+ * Ressource geschaltet, und loest der Zwischenraum zwischen zwei Zeilen
+ * wirklich nichts aus. Der Umbruch macht die Zeile hoeher - genau deshalb
+ * wird unten rechts geklickt und nicht in der Mitte: das ist die Stelle, die
+ * es vor der Reparatur gar nicht gab.
+ */
+async function bedienprobe(
+  page: Page,
+  liste: Locator,
+  name: string,
+  flaeche: string,
+): Promise<void> {
+  const zustand = async (): Promise<boolean[]> =>
+    liste
+      .locator("input[type=checkbox]")
+      .evaluateAll((els) => els.map((el) => (el as HTMLInputElement).checked));
+
+  const zeile = liste.locator("label").filter({ hasText: name });
+
+  await expect(zeile, `${flaeche}: genau eine Zeile "${name}"`).toHaveCount(1);
+  await zeile.scrollIntoViewIfNeeded();
+
+  const kasten = await zeile.boundingBox();
+
+  expect(kasten, `${flaeche}: Zeilenkasten`).not.toBeNull();
+
+  const vorher = await zustand();
+
+  // Zaehlschranke: eine leere Liste wuerde jede Differenzpruefung unten still
+  // erfuellen.
+  expect(vorher.length, `${flaeche}: Auswahlkaestchen`).toBeGreaterThanOrEqual(2);
+
+  await page.mouse.click(kasten!.x + kasten!.width - 8, kasten!.y + kasten!.height - 6);
+
+  const nachher = await zustand();
+  const geaendert = vorher
+    .map((wert, i) => (wert === nachher[i] ? null : i))
+    .filter((i): i is number => i !== null);
+
+  expect(geaendert.length, `${flaeche}: geschaltete Zeilen`).toBe(1);
+  await expect(liste.getByRole("checkbox", { name })).toBeChecked();
+
+  /*
+   * Der Zwischenraum wird an der NACHBARZEILE der gemessenen Zeile geprueft,
+   * nicht an der ersten beliebigen Luecke der Liste. Der Grund ist gemessen
+   * und kein Vorsichtsprinzip: die Liste ist laenger als der Viewport, die
+   * erste Luecke lag ausserhalb, und ein Mausklick dort traf nichts mehr im
+   * Dialog - Radix wertete das als Klick nach aussen und SCHLOSS den Drawer.
+   * Der Test haette damit eine Eigenart der Messstelle gemeldet, nicht das
+   * Verhalten des Zwischenraums. Beide Zeilen liegen deshalb nachweislich im
+   * Sichtfeld, bevor geklickt wird.
+   */
+  const alle = liste.locator("label");
+  const anzahl = await alle.count();
+  const index = await alle.evaluateAll(
+    (els, gesucht) => els.findIndex((el) => (el.textContent ?? "").includes(gesucht)),
+    name,
+  );
+
+  expect(index, `${flaeche}: Index der Zeile`).toBeGreaterThanOrEqual(0);
+  expect(anzahl, `${flaeche}: Zeilen fuer die Zwischenraumprobe`).toBeGreaterThanOrEqual(2);
+
+  const partner = index + 1 < anzahl ? index + 1 : index - 1;
+
+  await alle.nth(Math.min(index, partner)).scrollIntoViewIfNeeded();
+  await alle.nth(Math.max(index, partner)).scrollIntoViewIfNeeded();
+
+  const eins = await alle.nth(Math.min(index, partner)).boundingBox();
+  const zwei = await alle.nth(Math.max(index, partner)).boundingBox();
+
+  expect(eins, `${flaeche}: obere Zeile`).not.toBeNull();
+  expect(zwei, `${flaeche}: untere Zeile`).not.toBeNull();
+
+  const sicht = page.viewportSize();
+
+  expect(sicht, `${flaeche}: Viewport`).not.toBeNull();
+  expect(eins!.y, `${flaeche}: obere Zeile im Sichtfeld`).toBeGreaterThanOrEqual(0);
+  expect(zwei!.y + zwei!.height, `${flaeche}: untere Zeile im Sichtfeld`).toBeLessThanOrEqual(
+    sicht!.height,
+  );
+
+  // Ist der Zwischenraum verschwunden, ueberlappen die Zeilen - dann meldet
+  // diese Zusicherung das, statt den Klick ins Leere laufen zu lassen.
+  const luecke = zwei!.y - eins!.y - eins!.height;
+
+  expect(luecke, `${flaeche}: Zwischenraum zwischen zwei Zeilen`).toBeGreaterThan(1);
+
+  const vorLuecke = await zustand();
+
+  await page.mouse.click(eins!.x + 20, eins!.y + eins!.height + luecke / 2);
+
+  expect(await zustand(), `${flaeche}: Klick im Zwischenraum`).toEqual(vorLuecke);
+}
+
+test.describe("EYT-176 Langer Ressourcenname im Tagesdrawer", () => {
+  for (const viewport of BREITEN) {
+    test(`bei ${viewport} px bleibt der Tagesdrawer mit langem Ressourcennamen im Rahmen`, async ({
+      page,
+      request,
+    }) => {
+      const name = `${LANGER_RESSOURCENNAME}Tag${viewport}`;
+
+      await mitLangerRessource(request, name, async (id) => {
+        await page.setViewportSize({ width: viewport, height: 800 });
+        await tagesdrawer(page);
+
+        const drawer = page.getByRole("dialog", { name: "Baustellentag" });
+        const liste = drawer.getByTestId("drawer-ressourcen");
+
+        await expect(liste).toBeVisible();
+        await expect(liste.getByRole("checkbox", { name })).toHaveCount(1);
+
+        const mass = await ressourcenzeile(page, name);
+
+        // Zaehlschranken: eine verschwundene Zeile oder eine leere Liste soll
+        // auffallen, statt still gruen zu werden.
+        expect(mass.anzahl, `Zeilen mit "${name}"`).toBe(1);
+        expect(mass.zeilenGesamt, "Auswahlzeilen im Tagesdrawer").toBeGreaterThanOrEqual(2);
+
+        // Der gespeicherte Fachwert steht ungekuerzt in der Zeile.
+        expect(mass.text).toContain(name);
+
+        expect(`Tagesdrawer ${viewport}: ${zeilenbefund(mass)}`).toBe(
+          `Tagesdrawer ${viewport}: ${BEFUND_OK}`,
+        );
+
+        await bedienprobe(page, liste, name, `Tagesdrawer ${viewport}`);
+
+        // Der Wert in der Datenbank bleibt unangetastet - keine Kuerzung, keine
+        // nachtraegliche Laengenvalidierung zur Layoutrettung.
+        const gelesen = await request.get(`/api/ressourcen`);
+
+        expect(gelesen.status()).toBe(200);
+        expect(
+          ((await gelesen.json()) as { items: { id: string; name: string }[] }).items.find(
+            (r) => r.id === id,
+          )?.name,
+        ).toBe(name);
+      });
+    });
+  }
+});
+
+test.describe("EYT-176 Langer Ressourcenname in Assistent-Schritt 3", () => {
+  for (const viewport of BREITEN) {
+    test(`bei ${viewport} px bleibt Schritt 3 mit langem Ressourcennamen im Rahmen`, async ({
+      page,
+      request,
+    }) => {
+      const name = `${LANGER_RESSOURCENNAME}Schritt${viewport}`;
+
+      await mitLangerRessource(request, name, async (id) => {
+        await page.setViewportSize({ width: viewport, height: 800 });
+        await assistent(page, 3);
+
+        const drawer = page.getByRole("dialog", { name: "Einsatz anlegen" });
+        const liste = drawer.getByTestId("ressourcen");
+
+        await expect(liste).toBeVisible();
+        await expect(liste.getByRole("checkbox", { name })).toHaveCount(1);
+
+        const mass = await ressourcenzeile(page, name);
+
+        expect(mass.anzahl, `Zeilen mit "${name}"`).toBe(1);
+        expect(mass.zeilenGesamt, "Auswahlzeilen in Schritt 3").toBeGreaterThanOrEqual(2);
+        expect(mass.text).toContain(name);
+
+        expect(`Assistent Schritt 3 ${viewport}: ${zeilenbefund(mass)}`).toBe(
+          `Assistent Schritt 3 ${viewport}: ${BEFUND_OK}`,
+        );
+
+        await bedienprobe(page, liste, name, `Assistent Schritt 3 ${viewport}`);
+
+        // Der Zaehler sieht die Auswahl - die Zeile ist also nicht nur
+        // angehakt, sondern auch fachlich angekommen.
+        await expect(drawer.getByTestId("auswahlzaehler")).toContainText("1 Ressource");
+
+        /*
+         * Die Suche filtert die MITARBEITENDEN und laesst die Ressourcen
+         * stehen. Beides wird gemessen: dass sie ueberhaupt noch filtert, und
+         * dass sie die lange Ressourcenzeile nicht mitnimmt.
+         */
+        const personenVorher = await drawer.getByTestId("mitarbeitende").locator("li").count();
+
+        expect(personenVorher).toBeGreaterThanOrEqual(2);
+
+        await drawer.getByLabel("Mitarbeitende suchen").fill("zzz-kein-treffer");
+        await expect(drawer.getByTestId("mitarbeitende").locator("li")).toHaveCount(0);
+        await expect(liste.getByRole("checkbox", { name })).toBeChecked();
+
+        await drawer.getByLabel("Mitarbeitende suchen").fill("");
+        await expect(drawer.getByTestId("mitarbeitende").locator("li")).toHaveCount(personenVorher);
+
+        const gelesen = await request.get(`/api/ressourcen`);
+
+        expect(gelesen.status()).toBe(200);
+        expect(
+          ((await gelesen.json()) as { items: { id: string; name: string }[] }).items.find(
+            (r) => r.id === id,
+          )?.name,
+        ).toBe(name);
+      });
     });
   }
 });

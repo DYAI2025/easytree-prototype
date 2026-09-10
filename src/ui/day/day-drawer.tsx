@@ -345,21 +345,54 @@ export function DayDrawer({
 
           <fieldset
             data-testid="drawer-ressourcen"
-            className="flex flex-col gap-1"
+            /*
+             * min-w-0 zusaetzlich zum Namen unten: ein <fieldset> traegt aus
+             * dem Browser-Stylesheet `min-inline-size: min-content` und
+             * schrumpft deshalb NIE unter die Breite seines laengsten Wortes -
+             * auch dann nicht, wenn das Kind darin laengst brechen duerfte.
+             * Gemessen vor der Reparatur: die Zeile selbst war 589 px breit
+             * bei 374 px nutzbarer Dialogbreite. Beim <ul> von Schritt 3 gibt
+             * es diese Eigenart des Browsers nicht, dort lief nur der Text
+             * ueber - derselbe Befund, zwei verschiedene Wege dorthin.
+             */
+            className="flex min-w-0 flex-col gap-1"
             disabled={gesperrt}
           >
             <legend className="font-medium">Ressourcen</legend>
             {resources.map((mittel) => (
               // Dieselbe 44-px-Zeile wie beim Team (EYT-176).
               <label key={mittel.id} className="flex min-h-11 items-center gap-2">
+                {/*
+                min-w-0 + break-words am Namen, shrink-0 an der Checkbox -
+                Inhaltsrobustheit der Zeile (EYT-176 F1).
+
+                Der Name stand hier als nackter Textknoten im Label und war
+                damit ein ANONYMES Flex-Kind: anonyme Flex-Kinder lassen sich
+                nicht adressieren, tragen `min-width: auto` und schrumpfen
+                deshalb nie unter ihre min-content-Breite. Bei einem
+                zusammenhaengenden Namen IST diese Breite der ganze Name -
+                gemessen 567 px, und damit `dialog.scrollWidth` 604 gegen
+                `clientWidth` 374 (ebenso 605 gegen 324 und 319).
+
+                Das Dokument blieb dabei gruen, weil `Dialog.Content`
+                `overflow-y-auto` traegt: ist eine Achse nicht `visible`,
+                rechnet CSS die andere auf `auto` - der Drawer scrollte also
+                selbst horizontal. Deshalb misst der Test die Scrollflaeche
+                und nicht nur `documentElement`.
+
+                Der gespeicherte Fachwert bleibt unangetastet: gekuerzt wird
+                nichts, und eine Laengenvalidierung nur zur Layoutrettung gibt
+                es ausdruecklich nicht.
+              */}
                 <input
                   type="checkbox"
                   value={mittel.id}
                   aria-label={mittel.name}
                   checked={entwurf.resourceIds.includes(mittel.id)}
                   onChange={() => umschalten(mittel.id, "resourceIds")}
+                  className="shrink-0"
                 />
-                {mittel.name}
+                <span className="min-w-0 break-words">{mittel.name}</span>
               </label>
             ))}
           </fieldset>

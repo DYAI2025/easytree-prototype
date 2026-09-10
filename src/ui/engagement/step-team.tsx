@@ -197,13 +197,36 @@ export function StepTeam({
         {resources.map((r) => (
           <li key={r.id}>
             <label className="flex min-h-11 items-center gap-2">
+              {/*
+              min-w-0 + break-words am Namen, shrink-0 an der Checkbox -
+              Inhaltsrobustheit der Zeile (EYT-176 F2).
+
+              Der Name stand hier als nackter Textknoten im Label und war
+              damit ein ANONYMES Flex-Kind: anonyme Flex-Kinder lassen sich
+              nicht adressieren, tragen `min-width: auto` und schrumpfen
+              deshalb nie unter ihre min-content-Breite. Bei einem
+              zusammenhaengenden Namen IST diese Breite der ganze Name -
+              gemessen 590 px, und damit `dialog.scrollWidth` 627 gegen
+              `clientWidth` 374 (ebenso 628 gegen 324 und 319).
+
+              Das Dokument blieb dabei gruen, weil `Dialog.Content`
+              `overflow-y-auto` traegt: ist eine Achse nicht `visible`,
+              rechnet CSS die andere auf `auto` - der Drawer scrollte also
+              selbst horizontal. Deshalb misst der Test die Scrollflaeche
+              und nicht nur `documentElement`.
+
+              Der gespeicherte Fachwert bleibt unangetastet: gekuerzt wird
+              nichts, und eine Laengenvalidierung nur zur Layoutrettung gibt
+              es ausdruecklich nicht.
+            */}
               <input
                 type="checkbox"
                 aria-label={r.name}
                 checked={mittel.includes(r.id)}
                 onChange={() => umschalten(r.id, setMittel)}
+                className="shrink-0"
               />
-              {r.name}
+              <span className="min-w-0 break-words">{r.name}</span>
             </label>
           </li>
         ))}
