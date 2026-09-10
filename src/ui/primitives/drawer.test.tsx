@@ -156,3 +156,102 @@ describe("Drawer", () => {
     expect(dialog.className).toContain("transition");
   });
 });
+
+/*
+ * EYT-174 / UX-081 / UX-082.
+ *
+ * Die `Buehne` oben laesst den Drawer mit `open={false}` STEHEN. So wird er im
+ * Produkt an keiner einzigen Stelle benutzt: `day-drawer`, `cost-drawer`,
+ * `engagement-drawer` und `series-preview-dialog` uebergeben alle das literale
+ * `open` und werden von ihrem Elternteil AUS DEM BAUM GENOMMEN, wenn sie zu
+ * sind. Genau diesen Unterschied hat der Live-QA-Lauf getroffen: nach `Esc`
+ * und nach `Schliessen` lag der Fokus auf `document.body`.
+ *
+ * Diese Buehne bildet deshalb die Produktionsform ab - bedingtes Mounten.
+ * Ohne sie bleibt die Fokusrueckgabe gruen geprueft und im Produkt kaputt.
+ */
+function BuehneMontage({ titel = "Baustellentag" }: { readonly titel?: string }) {
+  const [offen, setOffen] = useState(false);
+
+  return (
+    <>
+      <button type="button" onClick={() => setOffen(true)}>
+        Oeffnen
+      </button>
+      <button type="button">Nachbar</button>
+      {offen && (
+        <Drawer open onOpenChange={(o) => !o && setOffen(false)} title={titel}>
+          <button type="button">Erstes Feld</button>
+          <button type="button">Zweites Feld</button>
+        </Drawer>
+      )}
+    </>
+  );
+}
+
+describe("Drawer, der nur waehrend der Anzeige gemountet ist", () => {
+  it("gibt den Fokus nach Esc an den Ausloeser zurueck", async () => {
+    stubReducedMotion(false);
+    const nutzer = userEvent.setup();
+
+    render(<BuehneMontage />);
+
+    const ausloeser = screen.getByRole("button", { name: "Oeffnen" });
+
+    await nutzer.click(ausloeser);
+    await screen.findByRole("dialog");
+    await nutzer.keyboard("{Escape}");
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(ausloeser);
+    });
+    // Ausdruecklich: nicht der Rueckfall auf den Seitenanfang (der QA-Befund).
+    expect(document.activeElement).not.toBe(document.body);
+  });
+
+  it("gibt den Fokus nach dem Schliessen-Knopf an den Ausloeser zurueck", async () => {
+    stubReducedMotion(false);
+    const nutzer = userEvent.setup();
+
+    render(<BuehneMontage />);
+
+    const ausloeser = screen.getByRole("button", { name: "Oeffnen" });
+
+    await nutzer.click(ausloeser);
+    await screen.findByRole("dialog");
+    await nutzer.click(screen.getByRole("button", { name: "Dialog schliessen" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(ausloeser);
+    });
+    expect(document.activeElement).not.toBe(document.body);
+  });
+
+  it("gibt den Fokus auch bei Oeffnen per Tastatur an genau diesen Ausloeser zurueck", async () => {
+    stubReducedMotion(false);
+    const nutzer = userEvent.setup();
+
+    render(<BuehneMontage />);
+
+    const ausloeser = screen.getByRole("button", { name: "Oeffnen" });
+
+    // Kein Klick: der Weg ueber die Tastatur muss denselben Ausloeser treffen.
+    ausloeser.focus();
+    await nutzer.keyboard("{Enter}");
+    await screen.findByRole("dialog");
+    await nutzer.keyboard("{Escape}");
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(ausloeser);
+    });
+  });
+});

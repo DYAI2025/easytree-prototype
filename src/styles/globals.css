@@ -47,3 +47,23 @@
     scroll-behavior: auto !important;
   }
 }
+
+/*
+ * Vergangene Kalendertage (Plan 6.3).
+ *
+ * Schraffur statt nur einer anderen Flaechenfarbe: Farbe ist in diesem Produkt
+ * ausschliesslich Orientierung und nie Statuswahrheit (Produktinvariante 6).
+ * Das Muster ist ein zweites, farbunabhaengiges Merkmal; den erklaerenden Text
+ * traegt zusaetzlich das title-Attribut der Zelle.
+ *
+ * Der Streifen liegt bewusst sehr flach im Kontrast: er muss den Tag als
+ * gesperrt lesbar machen, ohne die Tageskarten darauf zu uebertoenen - die
+ * bleiben lesbar und bedienbar (read-only ist keine Deaktivierung).
+ */
+.eyt-vergangen {
+  background-image: repeating-linear-gradient(
+    45deg,
+    color-mix(in srgb, var(--eyt-text-secondary) 22%, transparent) 0 3px,
+    transparent 3px 9px
+  );
+}

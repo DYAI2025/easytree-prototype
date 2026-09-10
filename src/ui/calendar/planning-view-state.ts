@@ -30,7 +30,12 @@ export const PLANUNGS_DRAWER = ["neu", "tag", "kosten"] as const;
 export type PlanungsDrawer = (typeof PLANUNGS_DRAWER)[number];
 
 export type PlanungsViewState =
-  | { readonly drawer: null }
+  /**
+   * Kein Drawer - aber moeglicherweise ein ausgewaehlter Tag: unterhalb des
+   * md-Umbruchs zeigt die Tagesliste die Karten des gewaehlten Tages, ohne
+   * dass ein Drawer offen waere (Plan 6.2).
+   */
+  | { readonly drawer: null; readonly tag: string | null }
   | { readonly drawer: "neu"; readonly tag: string | null }
   | { readonly drawer: "tag"; readonly worksiteDayId: string; readonly tag: string }
   | {
@@ -40,8 +45,8 @@ export type PlanungsViewState =
       readonly tag: string | null;
     };
 
-/** Der Kalender ohne Drawer - der Rueckfall fuer jeden unbrauchbaren Zustand. */
-export const KEIN_DRAWER: PlanungsViewState = { drawer: null };
+/** Der Kalender ohne Drawer und ohne Auswahl - der Rueckfall fuer jeden unbrauchbaren Zustand. */
+export const KEIN_DRAWER: PlanungsViewState = { drawer: null, tag: null };
 
 export interface PlanungsUrlEingabe {
   readonly monat: string;
@@ -89,15 +94,20 @@ export function resolvePlanungsViewState(
   view: MonthPlanningViewDto,
   params: Readonly<Record<string, string | string[] | undefined>>,
 ): PlanungsViewState {
-  const drawer = einzeln(params.drawer);
-
-  if (!istDrawer(drawer)) {
-    return KEIN_DRAWER;
-  }
-
+  /*
+   * Der Tag wird VOR dem Drawer aufgeloest: er ist ein eigenstaendiger
+   * Ansichtszustand (die Tagesauswahl der Mobilform) und darf nicht davon
+   * abhaengen, ob zusaetzlich ein Drawer offen ist.
+   */
   const rasterTage = new Set(view.weeks.flatMap((woche) => woche.days.map((tag) => tag.date)));
   const rohTag = einzeln(params.tag);
   const tag = rohTag !== undefined && rasterTage.has(rohTag) ? rohTag : null;
+
+  const drawer = einzeln(params.drawer);
+
+  if (!istDrawer(drawer)) {
+    return { drawer: null, tag };
+  }
 
   if (drawer === "neu") {
     return { drawer: "neu", tag };
@@ -106,7 +116,7 @@ export function resolvePlanungsViewState(
   const id = einzeln(params.id);
 
   if (id === undefined) {
-    return KEIN_DRAWER;
+    return { drawer: null, tag };
   }
 
   if (drawer === "tag") {
@@ -115,13 +125,13 @@ export function resolvePlanungsViewState(
     // Das Datum kommt aus dem Lesemodell, nicht aus der URL: das Modell weiss,
     // an welchem Tag der Baustellentag haengt, die URL koennte luegen.
     return karte === undefined
-      ? KEIN_DRAWER
+      ? { drawer: null, tag }
       : { drawer: "tag", worksiteDayId: id, tag: karte.date };
   }
 
   const einsatz = view.cards.find((eintrag) => eintrag.engagementId === id);
 
   return einsatz === undefined
-    ? KEIN_DRAWER
+    ? { drawer: null, tag }
     : { drawer: "kosten", engagementId: id, engagementTitle: einsatz.title, tag };
 }

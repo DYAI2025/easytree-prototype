@@ -116,7 +116,16 @@ export function StepWorksite({ customers, worksites, onNext }: StepWorksiteProps
                 // verhindern soll.
                 setGewaehlteBaustelle("");
               }}
-              className="rounded border border-line bg-surface p-2"
+              /*
+               * min-h-11 = 44 CSS-Pixel (WCAG 2.5.5, EYT-176).
+               *
+               * `p-2` allein ergab 42 px (Text 16 px, Zeilenbox 24, plus 2x8 Innenabstand,
+               * plus 2 px Rahmen), ein `select` sogar nur 38. Gemessen im Produktionsbuild
+               * bei 375, 325 und 320 px - dieselbe Zahl auf jeder Breite, denn die Hoehe
+               * haengt nicht am Viewport. Die Untergrenze steht an jedem Feld dieser Datei;
+               * eine eigene Abstraktion fuer einen CSS-Wert waere mehr Apparat als Nutzen.
+               */
+              className="min-h-11 rounded border border-line bg-surface p-2"
             >
               <option value="">Bitte waehlen</option>
               {kunden.map((k) => (
@@ -147,7 +156,7 @@ export function StepWorksite({ customers, worksites, onNext }: StepWorksiteProps
                 setGewaehlteBaustelle(event.target.value);
                 setFehler(null);
               }}
-              className="rounded border border-line bg-surface p-2"
+              className="min-h-11 rounded border border-line bg-surface p-2"
             >
               <option value="">Bitte waehlen</option>
               {sichtbareBaustellen.map((b) => (
@@ -229,7 +238,7 @@ function KundeAnlegen({
         id={nameId}
         {...form.register("name")}
         aria-invalid={form.formState.errors.name === undefined ? undefined : true}
-        className="rounded border border-line bg-surface p-2"
+        className="min-h-11 rounded border border-line bg-surface p-2"
       />
       {form.formState.errors.name !== undefined && (
         <p role="alert" className="text-danger-text">
@@ -292,7 +301,7 @@ function BaustelleAnlegen({
         id={nameId}
         {...form.register("name")}
         aria-invalid={form.formState.errors.name === undefined ? undefined : true}
-        className="rounded border border-line bg-surface p-2"
+        className="min-h-11 rounded border border-line bg-surface p-2"
       />
       <label htmlFor={adresseId} className="font-medium">
         Adresse
@@ -301,7 +310,7 @@ function BaustelleAnlegen({
         id={adresseId}
         {...form.register("addressLine")}
         aria-invalid={form.formState.errors.addressLine === undefined ? undefined : true}
-        className="rounded border border-line bg-surface p-2"
+        className="min-h-11 rounded border border-line bg-surface p-2"
       />
       {fehler !== null && (
         <p role="alert" className="text-danger-text">

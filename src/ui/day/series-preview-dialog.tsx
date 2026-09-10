@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import type { DayChangeResult } from "../../contracts/day-change";
 import type { SeriesPreviewDto, WorksiteDayDetailDto } from "../../contracts/worksite-days";
 import { ApiProblemError, apiPost } from "../../lib/api-client";
 import { Button } from "../primitives/button";
@@ -42,7 +43,14 @@ export interface SeriesPreviewDialogProps {
   readonly entwurf: DayChangeEntwurf;
   readonly namen: SeriesNamen;
   readonly onClose: () => void;
-  readonly onApplied: () => void;
+  /**
+   * Bekommt das Ergebnis der Uebernahme (EYT-175). `updatedDayIds` ist die
+   * einzige belastbare Quelle fuer "wie viele Tage wurden geaendert": die
+   * Zieltage der Vorschau koennen davon abweichen, weil ausgeschlossene und
+   * gesperrte Tage nicht geschrieben werden. Eine im Client gezaehlte Zahl
+   * waere eine Schaetzung.
+   */
+  readonly onApplied: (ergebnis: DayChangeResult) => void;
 }
 
 /** `2026-09-08` -> `08.09.2026`. Ohne Date-Objekt, also ohne Zeitzonenfalle. */
@@ -154,20 +162,23 @@ export function SeriesPreviewDialog({
     setFehler(null);
 
     try {
-      await apiPost(`/api/baustellentage/${detail.worksiteDayId}/aenderungen`, {
-        scope: "THIS_AND_FOLLOWING",
-        expectedRevisionNo: detail.revisionNo,
-        changes: {
-          employeeIds: [...entwurf.employeeIds],
-          resourceIds: [...entwurf.resourceIds],
-          plannedStartTime: entwurf.plannedStartTime,
-          plannedEndTime: entwurf.plannedEndTime,
-          ...(entwurf.note === "" ? {} : { note: entwurf.note }),
+      const ergebnis = await apiPost<DayChangeResult>(
+        `/api/baustellentage/${detail.worksiteDayId}/aenderungen`,
+        {
+          scope: "THIS_AND_FOLLOWING",
+          expectedRevisionNo: detail.revisionNo,
+          changes: {
+            employeeIds: [...entwurf.employeeIds],
+            resourceIds: [...entwurf.resourceIds],
+            plannedStartTime: entwurf.plannedStartTime,
+            plannedEndTime: entwurf.plannedEndTime,
+            ...(entwurf.note === "" ? {} : { note: entwurf.note }),
+          },
+          includeAdjustedDayIds: [...einbezogen],
         },
-        includeAdjustedDayIds: [...einbezogen],
-      });
+      );
 
-      onApplied();
+      onApplied(ergebnis);
     } catch (ursache) {
       setFehler(
         ursache instanceof ApiProblemError
@@ -250,12 +261,29 @@ export function SeriesPreviewDialog({
                        */}
                       {(row.status === "adjusted_excluded" ||
                         row.status === "adjusted_included") && (
-                        <input
-                          type="checkbox"
-                          aria-label={`${deutsch(row.date)} einbeziehen`}
-                          checked={einbezogen.includes(row.worksiteDayId)}
-                          onChange={() => umschalten(row.worksiteDayId)}
-                        />
+                        /*
+                         * Das Label ist hier die Bedienflaeche (EYT-176).
+                         *
+                         * Anders als bei den Team- und Ressourcenzeilen im
+                         * Tagesdrawer stand dieser Kasten frei in der Zelle:
+                         * gemessene 13x13 CSS-Pixel, ohne irgendeine groessere
+                         * Flaeche, die den Griff auffinge. Die Ausweichformel
+                         * "gleichwertige effektive Trefferflaeche" gab es hier
+                         * also nicht - erst das umschliessende Label schafft
+                         * sie, min-h-11/min-w-11 = 44x44.
+                         *
+                         * Das Label traegt bewusst KEINEN Text: der zugaengliche
+                         * Name sitzt weiter am `input` (aria-label mit Datum),
+                         * und ein zweiter Name daneben wuerde ihn ueberschreiben.
+                         */
+                        <label className="flex min-h-11 min-w-11 items-center justify-center">
+                          <input
+                            type="checkbox"
+                            aria-label={`${deutsch(row.date)} einbeziehen`}
+                            checked={einbezogen.includes(row.worksiteDayId)}
+                            onChange={() => umschalten(row.worksiteDayId)}
+                          />
+                        </label>
                       )}
                     </td>
                   </tr>

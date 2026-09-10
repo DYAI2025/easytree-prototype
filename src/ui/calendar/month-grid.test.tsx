@@ -292,3 +292,112 @@ describe("MonthGrid Tastatur in der Zelle", () => {
     expect(onCreateForDate).toHaveBeenCalledExactlyOnceWith("2026-09-07");
   });
 });
+
+/*
+ * V049-02: Plan 6.3 verlangt fuer Tage vor heute ein sichtbares
+ * Schraffur-Muster und den erklaerenden Text "gesperrt". Die erste
+ * Candidate-Runde von TASK-049 hat belegt, dass beides fehlte - der ganze
+ * August sah aus wie ein Zukunftsmonat.
+ *
+ * Das aria-label bleibt ABSICHTLICH unveraendert: Plan 6.3 nennt den Tooltip
+ * als Ort des Textes, und die bestehende Labelzusicherung weiter oben
+ * beschreibt denselben Vertrag.
+ */
+describe("MonthGrid: Vergangenheit", () => {
+  it("kennzeichnet jeden Tag vor heute als vergangen", () => {
+    const { container } = renderGrid();
+    const vergangen = [...container.querySelectorAll('[role="gridcell"][data-vergangen="true"]')];
+    const daten = vergangen.map((zelle) => zelle.getAttribute("data-datum"));
+
+    // today = 2026-09-10, das Raster beginnt am 31.08.
+    expect(daten).toEqual([
+      "2026-08-31",
+      "2026-09-01",
+      "2026-09-02",
+      "2026-09-03",
+      "2026-09-04",
+      "2026-09-05",
+      "2026-09-06",
+      "2026-09-07",
+      "2026-09-08",
+      "2026-09-09",
+    ]);
+  });
+
+  it("erklaert den Zustand im Tooltip mit dem Wort gesperrt", () => {
+    const { container } = renderGrid();
+    const gestern = container.querySelector('[data-datum="2026-09-09"]');
+
+    expect(gestern?.getAttribute("title")).toContain("gesperrt");
+  });
+
+  it("laesst heute und die Zukunft unmarkiert", () => {
+    const { container } = renderGrid();
+
+    expect(
+      container.querySelector('[data-datum="2026-09-10"]')?.getAttribute("data-vergangen"),
+    ).toBeNull();
+    expect(
+      container.querySelector('[data-datum="2026-09-11"]')?.getAttribute("data-vergangen"),
+    ).toBeNull();
+    expect(container.querySelector('[data-datum="2026-09-11"]')?.getAttribute("title")).toBeNull();
+  });
+
+  it("haelt vergangene Tage bedienbar - gesperrt ist keine Deaktivierung", () => {
+    const { container } = renderGrid();
+    const gestern = container.querySelector('[data-datum="2026-09-09"]');
+
+    expect(gestern?.getAttribute("aria-disabled")).toBeNull();
+    expect(gestern?.getAttribute("tabindex")).not.toBeNull();
+  });
+});
+
+/*
+ * V049-01: Plan 6.2 verlangt unter 768 px ein KOMPAKTES Raster - Farbpunkte
+ * und einen Zaehler in der Zelle, die Karten selbst erst nach Auswahl in einer
+ * Tagesliste unter dem Raster. Die erste Candidate-Runde zeigte stattdessen
+ * das Desktop-Kartenlayout in einer horizontalen Scrollregion.
+ */
+describe("MonthGrid: kompakte Zelle fuer schmale Viewports", () => {
+  it("rendert den Kompaktindikator getrennt von den Desktop-Karten", () => {
+    const { container } = renderGrid({
+      cardsByDate: { "2026-09-10": <span data-testid="desktop-karten">Karten</span> },
+      indicatorsByDate: { "2026-09-10": <span data-testid="kompakt">Punkte</span> },
+      countsByDate: { "2026-09-10": 2 },
+    });
+
+    const zelle = container.querySelector('[data-datum="2026-09-10"]')!;
+
+    expect(zelle.querySelector('[data-testid="kompakt"]')).not.toBeNull();
+    expect(zelle.querySelector('[data-testid="desktop-karten"]')).not.toBeNull();
+  });
+
+  it("blendet die Desktop-Karten unterhalb des Umbruchs aus und den Indikator darueber", () => {
+    const { container } = renderGrid({
+      cardsByDate: { "2026-09-10": <span data-testid="desktop-karten">Karten</span> },
+      indicatorsByDate: { "2026-09-10": <span data-testid="kompakt">Punkte</span> },
+      countsByDate: { "2026-09-10": 2 },
+    });
+
+    const zelle = container.querySelector('[data-datum="2026-09-10"]')!;
+    const kompakt = zelle.querySelector('[data-testid="kompakt"]')!.parentElement!;
+    const karten = zelle.querySelector('[data-testid="desktop-karten"]')!.parentElement!;
+
+    // Kompakt ist die Grundform, Desktop schaltet ab dem md-Umbruch um.
+    expect(kompakt.className).toContain("md:hidden");
+    expect(karten.className).toContain("hidden");
+    expect(karten.className).toContain("md:block");
+  });
+
+  it("zwingt das Raster unterhalb des Umbruchs nicht mehr in eine Mindestbreite", () => {
+    const { container } = renderGrid();
+    const raster = container.querySelector('[role="grid"]')!;
+    // Auf Klassen-TOKEN pruefen, nicht auf Teilstrings: "md:min-w-[27.5rem]"
+    // enthaelt "min-w-[27.5rem]", eine Teilstringpruefung waere nie erfuellbar.
+    const klassen = raster.className.split(/\s+/);
+
+    // Unpraefixiert erzwang die Mindestbreite bei 320/375 px den Scroll.
+    expect(klassen).not.toContain("min-w-[27.5rem]");
+    expect(klassen).toContain("md:min-w-[27.5rem]");
+  });
+});

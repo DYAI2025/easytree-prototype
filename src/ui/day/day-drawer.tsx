@@ -60,6 +60,13 @@ export interface DayDrawerProps {
     detail: WorksiteDayDetailDto,
     namen: SeriesNamen,
   ) => void;
+  /**
+   * Ersatzziel der Fokusrueckgabe (EYT-174). Unterhalb des md-Umbruchs oeffnet
+   * die Karte der Tagesliste diesen Drawer, und die Liste verschwindet beim
+   * Schliessen mit - der Ausloeser existiert dann nicht mehr. Der Drawer fragt
+   * das hier nur in diesem Fall.
+   */
+  readonly restoreFocusFallback?: () => HTMLElement | null;
 }
 
 /** `HH:MM:SS` aus der Datenbank vs. `HH:MM` im Zeitfeld - hier gekuerzt. */
@@ -78,6 +85,7 @@ export function DayDrawer({
   onSaved,
   onShowCosts,
   onSeriesPreview,
+  restoreFocusFallback,
 }: DayDrawerProps) {
   const hinweisId = useId();
   const beginnId = useId();
@@ -230,6 +238,7 @@ export function DayDrawer({
           onClose();
         }
       }}
+      restoreFocusFallback={restoreFocusFallback}
       title="Baustellentag"
     >
       {ladefehler !== null && <p role="alert">{ladefehler}</p>}
@@ -306,7 +315,17 @@ export function DayDrawer({
           <fieldset data-testid="drawer-team" className="flex flex-col gap-1" disabled={gesperrt}>
             <legend className="font-medium">Einsatzteam</legend>
             {employees.map((person) => (
-              <label key={person.id} className="flex items-center gap-2">
+              /*
+               * min-h-11 = 44 CSS-Pixel (WCAG 2.5.5, EYT-176).
+               *
+               * Die Hoehe sitzt am LABEL, nicht an der Checkbox: die Checkbox
+               * bleibt das 13x13 grosse Betriebssystemelement, bedient wird
+               * die Zeile, die sie umschliesst - ein Klick irgendwo darauf
+               * schaltet sie. Genau das ist die "gleichwertige effektive
+               * Trefferflaeche" der Akzeptanz, und `beruehrziele.spec.ts`
+               * misst sie an allen vier Ecken, statt sie zu behaupten.
+               */
+              <label key={person.id} className="flex min-h-11 items-center gap-2">
                 <input
                   type="checkbox"
                   value={person.id}
@@ -331,7 +350,8 @@ export function DayDrawer({
           >
             <legend className="font-medium">Ressourcen</legend>
             {resources.map((mittel) => (
-              <label key={mittel.id} className="flex items-center gap-2">
+              // Dieselbe 44-px-Zeile wie beim Team (EYT-176).
+              <label key={mittel.id} className="flex min-h-11 items-center gap-2">
                 <input
                   type="checkbox"
                   value={mittel.id}
@@ -361,7 +381,16 @@ export function DayDrawer({
                       },
                 )
               }
-              className="rounded border border-line bg-surface p-2"
+              /*
+               * min-h-11 = 44 CSS-Pixel (WCAG 2.5.5, EYT-176).
+               *
+               * `p-2` allein ergab 42 px (Text 16 px, Zeilenbox 24, plus 2x8 Innenabstand,
+               * plus 2 px Rahmen), ein `select` sogar nur 38. Gemessen im Produktionsbuild
+               * bei 375, 325 und 320 px - dieselbe Zahl auf jeder Breite, denn die Hoehe
+               * haengt nicht am Viewport. Die Untergrenze steht an jedem Feld dieser Datei;
+               * eine eigene Abstraktion fuer einen CSS-Wert waere mehr Apparat als Nutzen.
+               */
+              className="min-h-11 rounded border border-line bg-surface p-2"
             />
             <label htmlFor={endeId}>Ende</label>
             <input
@@ -378,7 +407,7 @@ export function DayDrawer({
                       },
                 )
               }
-              className="rounded border border-line bg-surface p-2"
+              className="min-h-11 rounded border border-line bg-surface p-2"
             />
           </fieldset>
 
@@ -395,7 +424,7 @@ export function DayDrawer({
                   bisher === null ? bisher : { ...bisher, note: event.target.value },
                 )
               }
-              className="rounded border border-line bg-surface p-2"
+              className="min-h-11 rounded border border-line bg-surface p-2"
             />
           </div>
 
@@ -403,7 +432,10 @@ export function DayDrawer({
             <legend className="font-medium">Aenderung anwenden auf</legend>
             <div role="radiogroup" aria-label="Aenderung anwenden auf" className="flex flex-col">
               {DAY_CHANGE_SCOPES.map((wert) => (
-                <label key={wert} className="flex items-center gap-2">
+                // Dieselbe 44-px-Zeile (EYT-176): die Scope-Wahl ist die
+                // folgenschwerste Auswahl des Drawers und stand mit 24 px
+                // Hoehe direkt neben den Teamzeilen.
+                <label key={wert} className="flex min-h-11 items-center gap-2">
                   <input
                     type="radio"
                     name={scopeName}

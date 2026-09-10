@@ -140,7 +140,16 @@ export function EmployeeForm({ employee, onSaved, onCancel }: EmployeeFormProps)
           id={nameId}
           {...form.register("displayName")}
           aria-invalid={nameFehler === undefined ? undefined : true}
-          className="rounded border border-line bg-surface p-2"
+          /*
+           * min-h-11 = 44 CSS-Pixel (WCAG 2.5.5, EYT-176).
+           *
+           * `p-2` allein ergab 42 px (Text 16 px, Zeilenbox 24, plus 2x8 Innenabstand,
+           * plus 2 px Rahmen), ein `select` sogar nur 38. Gemessen im Produktionsbuild
+           * bei 375, 325 und 320 px - dieselbe Zahl auf jeder Breite, denn die Hoehe
+           * haengt nicht am Viewport. Die Untergrenze steht an jedem Feld dieser Datei;
+           * eine eigene Abstraktion fuer einen CSS-Wert waere mehr Apparat als Nutzen.
+           */
+          className="min-h-11 rounded border border-line bg-surface p-2"
         />
         {nameFehler !== undefined && (
           <p role="alert" className="text-danger-text">
@@ -156,7 +165,7 @@ export function EmployeeForm({ employee, onSaved, onCancel }: EmployeeFormProps)
         <input
           id={rolleId}
           {...form.register("roleLabel")}
-          className="rounded border border-line bg-surface p-2"
+          className="min-h-11 rounded border border-line bg-surface p-2"
         />
       </div>
 
@@ -170,7 +179,7 @@ export function EmployeeForm({ employee, onSaved, onCancel }: EmployeeFormProps)
           {...form.register("dailyCost")}
           aria-describedby={satzHinweisId}
           aria-invalid={satzFehler === undefined ? undefined : true}
-          className="rounded border border-line bg-surface p-2"
+          className="min-h-11 rounded border border-line bg-surface p-2"
         />
         <p id={satzHinweisId} className="text-ink-muted">
           {SATZ_HINWEIS}
@@ -182,7 +191,15 @@ export function EmployeeForm({ employee, onSaved, onCancel }: EmployeeFormProps)
         )}
       </div>
 
-      <label className="flex items-center gap-2">
+      {/*
+        min-h-11 = 44 CSS-Pixel (WCAG 2.5.5, EYT-176): der Aktiv-Schalter.
+
+        Die Hoehe sitzt am LABEL, nicht an der Checkbox. Die Checkbox bleibt das
+        13x13 grosse Betriebssystemelement; bedient wird die Zeile, die sie
+        umschliesst - ein Klick irgendwo darauf schaltet sie. Vorher war diese
+        Zeile 24 px hoch, gemessen im Produktionsbuild.
+      */}
+      <label className="flex min-h-11 items-center gap-2">
         <input type="checkbox" {...form.register("active")} />
         Aktiv
       </label>

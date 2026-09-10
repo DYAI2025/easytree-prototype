@@ -127,3 +127,29 @@ describe("resolvePlanungsViewState", () => {
     ).toEqual<PlanungsViewState>({ drawer: "neu", tag: "2026-08-31" });
   });
 });
+
+/*
+ * V049-01: die Mobilform waehlt einen Tag AUS, ohne einen Drawer zu oeffnen
+ * (Plan 6.2: Karten erscheinen nach Auswahl in der Tagesliste). Die Auswahl
+ * gehoert damit in dieselbe URL wie jeder andere Ansichtszustand - sonst
+ * ueberlebte sie keinen Reload und waere nicht teilbar (Befund B-05).
+ */
+describe("resolvePlanungsViewState: Tagesauswahl ohne Drawer", () => {
+  it("haelt den ausgewaehlten Tag fest, auch wenn kein Drawer offen ist", () => {
+    expect(
+      resolvePlanungsViewState(view, { monat: "2026-09", tag: "2026-09-10" }),
+    ).toEqual<PlanungsViewState>({ drawer: null, tag: "2026-09-10" });
+  });
+
+  it("verwirft eine Auswahl ausserhalb des gezeichneten Rasters", () => {
+    expect(
+      resolvePlanungsViewState(view, { monat: "2026-09", tag: "2026-12-24" }),
+    ).toEqual<PlanungsViewState>({ drawer: null, tag: null });
+  });
+
+  it("behaelt die Auswahl auch bei unbrauchbarem Drawer", () => {
+    expect(
+      resolvePlanungsViewState(view, { drawer: "quatsch", tag: "2026-09-10" }),
+    ).toEqual<PlanungsViewState>({ drawer: null, tag: "2026-09-10" });
+  });
+});

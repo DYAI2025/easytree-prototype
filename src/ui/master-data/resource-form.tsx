@@ -125,7 +125,16 @@ export function ResourceForm({ resource, onSaved, onCancel }: ResourceFormProps)
         <select
           id={typId}
           {...form.register("kind")}
-          className="rounded border border-line bg-surface p-2"
+          /*
+           * min-h-11 = 44 CSS-Pixel (WCAG 2.5.5, EYT-176).
+           *
+           * `p-2` allein ergab 42 px (Text 16 px, Zeilenbox 24, plus 2x8 Innenabstand,
+           * plus 2 px Rahmen), ein `select` sogar nur 38. Gemessen im Produktionsbuild
+           * bei 375, 325 und 320 px - dieselbe Zahl auf jeder Breite, denn die Hoehe
+           * haengt nicht am Viewport. Die Untergrenze steht an jedem Feld dieser Datei;
+           * eine eigene Abstraktion fuer einen CSS-Wert waere mehr Apparat als Nutzen.
+           */
+          className="min-h-11 rounded border border-line bg-surface p-2"
         >
           {RESOURCE_KINDS.map((kind) => (
             <option key={kind} value={kind}>
@@ -144,7 +153,7 @@ export function ResourceForm({ resource, onSaved, onCancel }: ResourceFormProps)
           id={nameId}
           {...form.register("name")}
           aria-invalid={nameFehler === undefined ? undefined : true}
-          className="rounded border border-line bg-surface p-2"
+          className="min-h-11 rounded border border-line bg-surface p-2"
         />
         {nameFehler !== undefined && (
           <p role="alert" className="text-danger-text">
@@ -160,7 +169,7 @@ export function ResourceForm({ resource, onSaved, onCancel }: ResourceFormProps)
         <input
           id={kennungId}
           {...form.register("identifier")}
-          className="rounded border border-line bg-surface p-2"
+          className="min-h-11 rounded border border-line bg-surface p-2"
         />
       </div>
 
@@ -174,7 +183,7 @@ export function ResourceForm({ resource, onSaved, onCancel }: ResourceFormProps)
           {...form.register("dailyCost")}
           aria-describedby={satzHinweisId}
           aria-invalid={satzFehler === undefined ? undefined : true}
-          className="rounded border border-line bg-surface p-2"
+          className="min-h-11 rounded border border-line bg-surface p-2"
         />
         <p id={satzHinweisId} className="text-ink-muted">
           {SATZ_HINWEIS}
@@ -186,7 +195,15 @@ export function ResourceForm({ resource, onSaved, onCancel }: ResourceFormProps)
         )}
       </div>
 
-      <label className="flex items-center gap-2">
+      {/*
+        min-h-11 = 44 CSS-Pixel (WCAG 2.5.5, EYT-176): der Aktiv-Schalter.
+
+        Die Hoehe sitzt am LABEL, nicht an der Checkbox. Die Checkbox bleibt das
+        13x13 grosse Betriebssystemelement; bedient wird die Zeile, die sie
+        umschliesst - ein Klick irgendwo darauf schaltet sie. Vorher war diese
+        Zeile 24 px hoch, gemessen im Produktionsbuild.
+      */}
+      <label className="flex min-h-11 items-center gap-2">
         <input type="checkbox" {...form.register("active")} />
         Aktiv
       </label>
@@ -266,7 +283,26 @@ export function ResourceAdmin({ resources }: ResourceAdminProps) {
                       />
                     ) : (
                       <div className="flex items-center justify-between gap-3">
-                        <span>
+                        {/*
+                          min-w-0 + break-words - Inhaltsrobustheit der Zeile (EYT-176).
+
+                          Ein Flex-Kind hat `min-width: auto` und schrumpft
+                          deshalb nie unter seine min-content-Breite. Bei einem
+                          zusammenhaengenden Namen IST die min-content-Breite
+                          der ganze Name: gemessen 527 px fuer 59 Zeichen, und
+                          damit `document.scrollWidth` 630 gegen `clientWidth`
+                          320 - der horizontale Ueberlauf lag auf dem DOKUMENT,
+                          nicht in einem scrollenden Bereich, und trat schon
+                          bei 375 px auf.
+
+                          `min-w-0` erlaubt das Schrumpfen, `break-words` gibt
+                          dem Namen die Bruchstelle, die er als ein Wort sonst
+                          nicht hat. Der gespeicherte Fachwert bleibt dabei
+                          unangetastet - gekuerzt wird nichts, und eine neue
+                          Namensvalidierung nur zur Layoutrettung gibt es
+                          ausdruecklich nicht.
+                        */}
+                        <span className="min-w-0 break-words">
                           <span data-testid="ressourcenname" className="font-medium">
                             {ressource.name}
                           </span>

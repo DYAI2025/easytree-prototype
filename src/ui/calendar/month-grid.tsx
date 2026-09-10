@@ -15,6 +15,12 @@ export interface MonthGridProps {
   readonly onCreateForDate: (date: LocalDate) => void;
   readonly onMonthChange: (richtung: -1 | 1) => void;
   readonly cardsByDate?: Readonly<Record<string, ReactNode>>;
+  /**
+   * Kompaktform derselben Tage fuer schmale Viewports (Plan 6.2): Farbpunkte
+   * und Zaehler statt der vollen Karten. Die Karten selbst erscheinen dort
+   * erst nach Auswahl in der Tagesliste unter dem Raster.
+   */
+  readonly indicatorsByDate?: Readonly<Record<string, ReactNode>>;
   readonly countsByDate?: Readonly<Record<string, number>>;
   /** Balken der mehrtaegigen Einsaetze; rein dekorativ (siehe SpanLayer). */
   readonly spans?: readonly SpanSegment[];
@@ -41,6 +47,7 @@ export function MonthGrid({
   onCreateForDate,
   onMonthChange,
   cardsByDate,
+  indicatorsByDate,
   countsByDate,
   spans,
   colourByEngagement,
@@ -146,23 +153,55 @@ export function MonthGrid({
     /*
      * Der Kalender scrollt in SEINEM Bereich, nicht im Dokument.
      *
-     * min-w-[27.5rem] haelt eine Tagesspalte bei 56 px; darin bleibt der
-     * Tageskarte nach Rahmen und Innenabstand genau 46 px - ueber der
-     * 44-px-Schwelle aus WCAG 2.5.5. Bei 375 px Viewport passt das Raster
-     * damit nicht mehr in die Breite und scrollt hier horizontal, statt das
-     * ganze Dokument zu verschieben (REQ-NF-004).
+     * Die Mindestbreite gilt AUSSCHLIESSLICH ab dem md-Umbruch: dort haelt
+     * min-w-[27.5rem] eine Tagesspalte bei 56 px, worin der Tageskarte nach
+     * Rahmen und Innenabstand 46 px bleiben - ueber der 44-px-Schwelle aus
+     * WCAG 2.5.5.
+     *
+     * Darunter gilt sie NICHT mehr. Vorher erzwang sie bei 320/375 px den
+     * horizontalen Scroll und damit das Desktop-Kartenlayout in winzigen
+     * Zellen; Plan 6.2 verlangt dort stattdessen die Kompaktform. Der
+     * Scrollcontainer bleibt trotzdem stehen - er ist die Reissleine, falls
+     * ein Inhalt doch einmal breiter wird, und haelt den Ueberlauf vom
+     * Dokument fern (REQ-NF-004).
      *
      * tabIndex + role/aria-label sind Pflicht, nicht Zierde: ein scrollbarer
      * Bereich ohne Tastaturzugang ist der axe-Verstoss
      * scrollable-region-focusable.
      */
-    <div role="region" aria-label="Monatskalender" tabIndex={0} className="overflow-x-auto">
-      <div role="grid" aria-labelledby={labelledBy} className="w-full min-w-[27.5rem]">
-        <div role="row" className="grid grid-cols-[3rem_repeat(7,minmax(0,1fr))]">
+    /*
+     * -mx-4 sm:mx-0 - der Kalender nimmt unterhalb von sm die volle
+     * Viewportbreite (EYT-176).
+     *
+     * Rechnung, nicht Geschmack: `main` traegt px-4, also 16 px je Seite. Bei
+     * 325 px Viewport blieben dem Raster 293 px, eine Tagesspalte damit
+     * 41,9 px und der Kompaktindikator darin 39,9 px - unter der 44-px-Schwelle
+     * aus WCAG 2.5.5, gemessen im Produktionsbuild. Ohne den Seitenrand sind es
+     * 46,4 px Spalte und 44,4 px Indikator.
+     *
+     * Der Weg ueber den Seitenrand ist der einzige, der ohne Nebenwirkung
+     * bleibt: das Raster breiter zu machen erzwaenge horizontalen
+     * Dokumentueberlauf, und die Trefferflaeche ueber die Zellgrenze zu ziehen
+     * liesse benachbarte Tage einander ueberlappen. Beides ist ausgeschlossen.
+     *
+     * Ab sm faellt die Verschiebung weg - dort ist die Spalte ohnehin breit
+     * genug, und der Seitenrand des Desktops bleibt unangetastet.
+     */
+    <div
+      role="region"
+      aria-label="Monatskalender"
+      tabIndex={0}
+      className="-mx-4 overflow-x-auto sm:mx-0"
+    >
+      <div role="grid" aria-labelledby={labelledBy} className="w-full md:min-w-[27.5rem]">
+        <div
+          role="row"
+          className="grid grid-cols-[0px_repeat(7,minmax(0,1fr))] md:grid-cols-[3rem_repeat(7,minmax(0,1fr))]"
+        >
           <div
             role="columnheader"
             aria-label="Kalenderwoche"
-            className="p-2 text-sm text-ink-muted"
+            className="sr-only md:not-sr-only md:p-2 md:text-sm md:text-ink-muted"
           >
             {/*
             Sichtbarer Text ist Pflicht: eine leere Kopfzelle ist ein echter
@@ -177,6 +216,14 @@ export function MonthGrid({
               key={kurz}
               role="columnheader"
               aria-label={WOCHENTAGE_LANG[index]}
+              /*
+               * Explizit platziert wie die Tageszellen. Der KW-Kopf ist
+               * unterhalb des md-Umbruchs `sr-only` und damit absolut
+               * positioniert - er belegt dort keine Spur mehr. Automatisch
+               * platzierte Wochentage ruecken dadurch um eine Spalte nach
+               * links und stehen nicht mehr ueber ihren Tagen.
+               */
+              style={{ gridColumn: index + 2 }}
               className="p-2 text-sm font-medium text-ink-muted"
             >
               {kurz}
@@ -188,7 +235,7 @@ export function MonthGrid({
           <div
             key={week.isoWeek}
             role="row"
-            className="grid grid-cols-[3rem_repeat(7,minmax(0,1fr))]"
+            className="grid grid-cols-[0px_repeat(7,minmax(0,1fr))] md:grid-cols-[3rem_repeat(7,minmax(0,1fr))]"
           >
             {/*
             Die Balken liegen IN der Wochenzeile, nicht in einer eigenen
@@ -209,13 +256,21 @@ export function MonthGrid({
               // Zellen derselben Gitterzeile, und automatisch platzierte
               // Elemente wuerden um sie herum in freie Spalten rutschen.
               style={{ gridColumn: 1, gridRow: 1 }}
-              className="p-2 text-sm text-ink-muted"
+              className="sr-only md:not-sr-only md:p-2 md:text-sm md:text-ink-muted"
             >
               {week.isoWeek}
             </div>
 
             {week.days.map((day, spaltenIndex) => {
               const anzahl = countsByDate?.[day.date] ?? 0;
+              /*
+               * Vergangenheit ist ein reiner Vergleich zweier LocalDates -
+               * beide sind YYYY-MM-DD, der Stringvergleich ist deshalb der
+               * Datumsvergleich. `today` kommt aus dem Serverlesemodell und
+               * damit aus dem einen Zeitanker (EASYTREE_FIXED_TODAY); die
+               * Zelle liest NIE selbst die Uhr.
+               */
+              const vergangen = day.date < today;
 
               return (
                 <div
@@ -227,18 +282,43 @@ export function MonthGrid({
                   tabIndex={day.date === aktiv ? 0 : -1}
                   data-datum={day.date}
                   data-ausserhalb={day.inMonth ? undefined : "true"}
+                  data-vergangen={vergangen ? "true" : undefined}
                   aria-label={tagesLabel(day.date, anzahl)}
+                  /*
+                   * Der erklaerende Text sitzt im Tooltip, wie Plan 6.3 es
+                   * vorschreibt - nicht im aria-label. Das Label beschreibt
+                   * den Tag, nicht die Bearbeitbarkeit, und seine Form ist
+                   * anderswo zugesichert.
+                   */
+                  title={
+                    vergangen
+                      ? "gesperrt - dieser Tag liegt vor dem heutigen Datum und ist nur lesbar"
+                      : undefined
+                  }
                   aria-current={day.date === today ? "date" : undefined}
                   style={{ gridColumn: spaltenIndex + 2, gridRow: 1 }}
                   onKeyDown={(event) => handleKey(event, day.date)}
                   onFocus={() => setAktiv(day.date)}
                   className={[
-                    "min-h-24 border border-line p-1 text-left align-top",
+                    // min-h-11 = 44 CSS-Pixel (Plan 6.11 fuer Mobil), ab md
+                    // die volle Desktop-Zelle.
+                    "min-h-11 border border-line p-0 text-left align-top md:min-h-24 md:p-1",
                     day.inMonth ? "bg-surface" : "bg-canvas text-ink-muted",
+                    // Schraffur NUR zusaetzlich: gesperrt bleibt bedienbar.
+                    vergangen ? "eyt-vergangen" : "",
                   ].join(" ")}
                 >
-                  <span className="text-sm">{Number(day.date.slice(8, 10))}</span>
-                  {cardsByDate?.[day.date]}
+                  <span className="block px-1 text-sm md:px-0">
+                    {Number(day.date.slice(8, 10))}
+                  </span>
+                  {/*
+                    Zwei Darstellungen desselben Tages, umgeschaltet per CSS
+                    statt per Media-Query im JavaScript: eine Breitenmessung im
+                    Client haette beim ersten Rendern noch keinen Wert und
+                    erzeugte einen Hydration-Unterschied.
+                  */}
+                  <span className="block md:hidden">{indicatorsByDate?.[day.date]}</span>
+                  <span className="hidden md:block">{cardsByDate?.[day.date]}</span>
                 </div>
               );
             })}

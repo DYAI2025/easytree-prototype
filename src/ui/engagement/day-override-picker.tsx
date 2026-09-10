@@ -48,7 +48,22 @@ export function DayOverridePicker({
       <legend className="font-medium">Tage anpassen</legend>
       <div className="grid grid-cols-2 gap-1">
         {tage.map((tag) => (
-          <label key={tag} className="flex items-center gap-2">
+          /*
+           * min-h-11 = 44 CSS-Pixel (WCAG 2.5.5, EYT-176).
+           *
+           * Die Hoehe sitzt am LABEL, nicht an der Checkbox: die Checkbox
+           * bleibt das 13x13 grosse Betriebssystemelement, bedient wird die
+           * Zeile, die sie umschliesst - ein Klick irgendwo darauf schaltet
+           * sie. Dieselbe Loesung wie bei den Team- und Ressourcenzeilen des
+           * Tagesdrawers; die Zeile IST hier bereits die Trefferflaeche, sie
+           * war nur zu flach.
+           *
+           * Gemessen im Produktionsbuild vor der Reparatur: 156x24 (375 px),
+           * 131x24 (325 px), 128,5x24 (320 px). Ein Teil der Zeilen erreichte
+           * bei 320 px durch den Textumbruch zufaellig 48 px - Zufall ist
+           * keine Zusicherung, deshalb steht die Untergrenze jetzt fest.
+           */
+          <label key={tag} className="flex min-h-11 items-center gap-2">
             <input type="checkbox" checked={ausgewaehlt.has(tag)} onChange={() => onToggle(tag)} />
             {tagLabel(tag)}
           </label>

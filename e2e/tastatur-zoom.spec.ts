@@ -145,15 +145,37 @@ async function masse(
   selektor: string,
 ): Promise<{ beschreibung: string; breite: number; hoehe: number }[]> {
   return page.evaluate((sel) => {
-    return Array.from(document.querySelectorAll(sel)).map((el) => {
-      const kasten = el.getBoundingClientRect();
+    return (
+      Array.from(document.querySelectorAll(sel))
+        /*
+         * Nur SICHTBARE Elemente sind Bedienflaechen.
+         *
+         * Seit der Kompaktform (Plan 6.2) stehen die Desktop-Tageskarten
+         * unterhalb des md-Umbruchs auf `display:none`; ihr Rechteck ist dann
+         * 0x0. Sie als "zu klein" zu zaehlen behauptete einen Fehlgriff auf
+         * einer Flaeche, die auf dem Telefon gar nicht existiert - der Test
+         * mass eine Darstellung, die niemand sieht.
+         *
+         * Das ist KEINE Lockerung: die Schwelle bleibt bei 44 px, und die
+         * Bedienflaechen, die auf dieser Breite wirklich da sind - der
+         * Kompaktindikator und die Karten der Tagesliste - werden unten
+         * ausdruecklich mitgemessen.
+         */
+        .filter((el) => {
+          const kasten = el.getBoundingClientRect();
 
-      return {
-        beschreibung: `${sel} "${(el.getAttribute("aria-label") ?? el.textContent ?? "").trim().slice(0, 40)}"`,
-        breite: kasten.width,
-        hoehe: kasten.height,
-      };
-    });
+          return kasten.width > 0 && kasten.height > 0;
+        })
+        .map((el) => {
+          const kasten = el.getBoundingClientRect();
+
+          return {
+            beschreibung: `${sel} "${(el.getAttribute("aria-label") ?? el.textContent ?? "").trim().slice(0, 40)}"`,
+            breite: kasten.width,
+            hoehe: kasten.height,
+          };
+        })
+    );
   }, selektor);
 }
 
@@ -446,8 +468,11 @@ test.describe("tastatur-und-zoom", () => {
     page,
   }) => {
     await page.setViewportSize({ width: 375, height: 800 });
-    await page.goto(PLANUNG);
+    // Mit ausgewaehltem Tag, damit die Tagesliste - die Bedienflaeche der
+    // Kompaktform - wirklich im Dokument steht und mitgemessen wird.
+    await page.goto(`${PLANUNG}&tag=2026-09-10`);
     await expect(page.getByRole("grid")).toBeVisible();
+    await expect(page.getByTestId("tagesliste")).toBeVisible();
 
     const flaechen = [
       ...(await masse(page, '[role="gridcell"]')),
@@ -455,11 +480,22 @@ test.describe("tastatur-und-zoom", () => {
       ...(await masse(page, '[data-testid="mehr-karten"]')),
       ...(await masse(page, "header nav a")),
       ...(await masse(page, '[data-testid="monatswerkzeuge"] button')),
+      // Die beiden Flaechen, ueber die auf dieser Breite ueberhaupt bedient
+      // wird (Plan 6.2): der Kompaktindikator in der Zelle und die Karten der
+      // Tagesliste darunter.
+      ...(await masse(page, '[data-testid="tagesindikator"]')),
+      ...(await masse(page, '[data-testid="tagesliste"] [data-testid="tageskarte"]')),
     ];
 
     // Ohne diese Schranke waere die Pruefung auch dann gruen, wenn gar nichts
     // gemessen wurde.
     expect(flaechen.length).toBeGreaterThan(40);
+    // Und ohne diese waere sie gruen, wenn die Kompaktform verschwaende: die
+    // sichtbaren Indikatoren muessen tatsaechlich gemessen worden sein.
+    expect(
+      flaechen.filter((f) => f.beschreibung.includes("tagesindikator")).length,
+    ).toBeGreaterThan(0);
+    expect(flaechen.filter((f) => f.beschreibung.includes("tagesliste")).length).toBeGreaterThan(0);
 
     const zuKlein = flaechen
       .filter((f) => f.breite < MINDESTFLAECHE || f.hoehe < MINDESTFLAECHE)

@@ -132,7 +132,31 @@ export function StepPeriod({ onNext }: { readonly onNext: (werte: StepPeriodWert
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex gap-4">
+      {/*
+        Unter sm untereinander statt nebeneinander (EYT-176).
+
+        Rechnung, nicht Geschmack: ein `input[type=date]` hat eine
+        min-content-Breite von 156 px - die drei Segmente plus das
+        Kalendersymbol lassen sich nicht weiter stauchen. Zwei davon plus
+        gap-4 sind 328 px; der Drawer bietet bei 325 px Viewport aber nur
+        325 - 1 (Rahmen) - 32 (p-4) = 292 px. Das Ende-Feld stand deshalb bei
+        325 und 320 px mit `right = 345` ausserhalb des sichtbaren Drawers,
+        gemessen im Produktionsbuild: `dialog.scrollWidth` 344 gegen
+        `clientWidth` 324 bzw. 319.
+
+        `min-w-0` waere hier KEINE Reparatur: die Felder schrumpften dann zwar
+        rechnerisch, das Datumsfeld schneidet aber seine eigenen Segmente ab
+        und ist unlesbar. Und `overflow-x-hidden` verstecken wuerde den
+        Ueberlauf, nicht beheben. Der Umbruch auf eine Spalte ist die
+        kleinste Aenderung, die das Feld vollstaendig sichtbar UND bedienbar
+        laesst.
+
+        Die Uhrzeitenzeile weiter unten bleibt bewusst unveraendert: ihre
+        beiden Felder messen 128,5 und 126,8 px und enden bei 320 px Viewport
+        auf `right = 288,3` - also innerhalb der nutzbaren 304 px. Sie ist
+        kein Befund, und ohne Befund keine Aenderung.
+      */}
+      <div className="flex flex-col gap-4 sm:flex-row">
         <div className="flex flex-col gap-1">
           <label htmlFor={beginnId} className="font-medium">
             Beginn
@@ -142,7 +166,16 @@ export function StepPeriod({ onNext }: { readonly onNext: (werte: StepPeriodWert
             type="date"
             value={start}
             onChange={(event) => setStart(event.target.value)}
-            className="rounded border border-line bg-surface p-2"
+            /*
+             * min-h-11 = 44 CSS-Pixel (WCAG 2.5.5, EYT-176).
+             *
+             * `p-2` allein ergab 42 px (Text 16 px, Zeilenbox 24, plus 2x8 Innenabstand,
+             * plus 2 px Rahmen), ein `select` sogar nur 38. Gemessen im Produktionsbuild
+             * bei 375, 325 und 320 px - dieselbe Zahl auf jeder Breite, denn die Hoehe
+             * haengt nicht am Viewport. Die Untergrenze steht an jedem Feld dieser Datei;
+             * eine eigene Abstraktion fuer einen CSS-Wert waere mehr Apparat als Nutzen.
+             */
+            className="min-h-11 rounded border border-line bg-surface p-2"
           />
         </div>
 
@@ -162,7 +195,7 @@ export function StepPeriod({ onNext }: { readonly onNext: (werte: StepPeriodWert
                 setHorizont(event.target.value);
                 setHorizontFehler(null);
               }}
-              className="rounded border border-line bg-surface p-2"
+              className="min-h-11 rounded border border-line bg-surface p-2"
             />
             {horizontFehler !== null && (
               <p id={horizontFehlerId} role="alert" className="text-danger-text">
@@ -180,13 +213,21 @@ export function StepPeriod({ onNext }: { readonly onNext: (werte: StepPeriodWert
               type="date"
               value={ende}
               onChange={(event) => setEnde(event.target.value)}
-              className="rounded border border-line bg-surface p-2"
+              className="min-h-11 rounded border border-line bg-surface p-2"
             />
           </div>
         )}
       </div>
 
-      <label className="flex items-center gap-2">
+      {/*
+        min-h-11 = 44 CSS-Pixel (WCAG 2.5.5, EYT-176): die beiden Schalter dieses Schritts.
+
+        Die Hoehe sitzt am LABEL, nicht an der Checkbox. Die Checkbox bleibt das
+        13x13 grosse Betriebssystemelement; bedient wird die Zeile, die sie
+        umschliesst - ein Klick irgendwo darauf schaltet sie. Vorher war diese
+        Zeile 24 px hoch, gemessen im Produktionsbuild.
+      */}
+      <label className="flex min-h-11 items-center gap-2">
         <input
           type="checkbox"
           checked={endeOffen}
@@ -214,7 +255,7 @@ export function StepPeriod({ onNext }: { readonly onNext: (werte: StepPeriodWert
         />
       )}
 
-      <label className="flex items-center gap-2">
+      <label className="flex min-h-11 items-center gap-2">
         <input
           type="checkbox"
           checked={zeitenAktiv}
@@ -234,7 +275,7 @@ export function StepPeriod({ onNext }: { readonly onNext: (werte: StepPeriodWert
               type="time"
               value={zeitVon}
               onChange={(event) => setZeitVon(event.target.value)}
-              className="rounded border border-line bg-surface p-2"
+              className="min-h-11 rounded border border-line bg-surface p-2"
             />
           </div>
           <div className="flex flex-col gap-1">
@@ -246,7 +287,7 @@ export function StepPeriod({ onNext }: { readonly onNext: (werte: StepPeriodWert
               type="time"
               value={zeitBis}
               onChange={(event) => setZeitBis(event.target.value)}
-              className="rounded border border-line bg-surface p-2"
+              className="min-h-11 rounded border border-line bg-surface p-2"
             />
           </div>
         </div>

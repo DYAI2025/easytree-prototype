@@ -153,14 +153,31 @@ export function StepTeam({
           type="search"
           value={suche}
           onChange={(event) => setSuche(event.target.value)}
-          className="rounded border border-line bg-surface p-2"
+          /*
+           * min-h-11 = 44 CSS-Pixel (WCAG 2.5.5, EYT-176).
+           *
+           * `p-2` allein ergab 42 px (Text 16 px, Zeilenbox 24, plus 2x8 Innenabstand,
+           * plus 2 px Rahmen), ein `select` sogar nur 38. Gemessen im Produktionsbuild
+           * bei 375, 325 und 320 px - dieselbe Zahl auf jeder Breite, denn die Hoehe
+           * haengt nicht am Viewport. Die Untergrenze steht an jedem Feld dieser Datei;
+           * eine eigene Abstraktion fuer einen CSS-Wert waere mehr Apparat als Nutzen.
+           */
+          className="min-h-11 rounded border border-line bg-surface p-2"
         />
       </div>
 
       <ul data-testid="mitarbeitende" className="flex flex-col gap-1">
         {gefiltert.map((m) => (
           <li key={m.id}>
-            <label className="flex items-center gap-2">
+            {/*
+              min-h-11 = 44 CSS-Pixel (WCAG 2.5.5, EYT-176): die Auswahlzeilen von Team und Ressourcen.
+
+              Die Hoehe sitzt am LABEL, nicht an der Checkbox. Die Checkbox bleibt das
+              13x13 grosse Betriebssystemelement; bedient wird die Zeile, die sie
+              umschliesst - ein Klick irgendwo darauf schaltet sie. Vorher war diese
+              Zeile 24 px hoch, gemessen im Produktionsbuild.
+            */}
+            <label className="flex min-h-11 items-center gap-2">
               <input
                 type="checkbox"
                 aria-label={`${m.displayName}${m.roleLabel === null ? "" : `, ${m.roleLabel}`}`}
@@ -179,7 +196,7 @@ export function StepTeam({
       <ul data-testid="ressourcen" className="flex flex-col gap-1">
         {resources.map((r) => (
           <li key={r.id}>
-            <label className="flex items-center gap-2">
+            <label className="flex min-h-11 items-center gap-2">
               <input
                 type="checkbox"
                 aria-label={r.name}

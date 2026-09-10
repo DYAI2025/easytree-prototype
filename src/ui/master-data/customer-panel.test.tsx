@@ -1,9 +1,10 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Customer } from "../../contracts/customer";
 import type { Worksite } from "../../contracts/worksite";
+import { ApiProblemError } from "../../lib/api-client";
 import { CustomerPanel } from "./customer-panel";
 
 const { apiPatch, apiPost } = vi.hoisted(() => ({ apiPatch: vi.fn(), apiPost: vi.fn() }));
@@ -202,5 +203,107 @@ describe("CustomerPanel mit Adresssuche", () => {
       lng: 13.0591,
       geocodeSource: "fixture",
     });
+  });
+});
+
+/*
+ * EYT-175 / UX-051: Erfolg nach der Baustellenanlage.
+ *
+ * Der Live-QA-Lauf QA-2026-09-09-01 hat die Anlage als erfolgreich gemessen -
+ * und danach keinerlei Bestaetigung gefunden. Das Formular verschwindet beim
+ * Speichern (`setFormular(null)`), die Meldung darf deshalb NICHT in ihm
+ * stehen; sie gehoert in das Panel, das bleibt.
+ */
+describe("CustomerPanel: Erfolg nach der Baustellenanlage (EYT-175)", () => {
+  function meldungsBereich(): HTMLElement {
+    return screen.getByTestId("erfolgsmeldung");
+  }
+
+  function meldung(): string {
+    return meldungsBereich().textContent ?? "";
+  }
+
+  async function baustelleAnlegen(nutzer: ReturnType<typeof userEvent.setup>) {
+    render(<CustomerPanel customers={KUNDEN} worksites={BAUSTELLEN} />);
+
+    await nutzer.click(auswaehlen("Stadtwerke Musterstadt"));
+    await nutzer.click(screen.getByRole("button", { name: "Neue Baustelle" }));
+
+    const formular = screen.getByRole("form", { name: "Neue Baustelle" });
+
+    await nutzer.type(within(formular).getByLabelText("Name der Baustelle"), "Suedpark Ost");
+
+    /*
+     * Die Adresse muss ueber einen der beiden ECHTEN Wege gesetzt werden. Nur
+     * in das Suchfeld zu tippen genuegt nicht: `AddressSearch` haelt den
+     * Suchbegriff fuer sich und meldet eine Adresse erst, wenn ein Treffer
+     * gewaehlt oder manuell eingegeben wurde - sonst bricht `absenden` mit
+     * "Pflichtfeld" ab (gemessen). Der manuelle Weg ist hier der kuerzere und
+     * braucht kein Geocoding.
+     */
+    await nutzer.click(within(formular).getByRole("button", { name: "Adresse manuell eingeben" }));
+    await nutzer.type(within(formular).getByLabelText("Adresse (manuell)"), "Suedallee 3");
+
+    return formular;
+  }
+
+  it("bestaetigt die Anlage mit dem Namen aus der Serverantwort", async () => {
+    const nutzer = userEvent.setup();
+
+    /*
+     * Der Server antwortet mit einem ANDEREN Namen als dem getippten. Das ist
+     * Absicht: die Meldung muss die gespeicherte Wahrheit nennen, nicht das
+     * Formularfeld. Stuende am Ende "Suedpark Ost", laese der Client sich
+     * selbst vor.
+     */
+    apiPost.mockResolvedValue({
+      ...baustelle(
+        "b0000000-0000-4000-8000-000000000009",
+        KUNDEN[0]!.id,
+        "Suedpark Ost (geprueft)",
+      ),
+    });
+
+    const formular = await baustelleAnlegen(nutzer);
+
+    expect(meldung()).toBe("");
+
+    await nutzer.click(within(formular).getByRole("button", { name: "Baustelle speichern" }));
+
+    // Das Formular ist weg - und die Meldung steht trotzdem.
+    await waitFor(() => {
+      expect(screen.queryByRole("form", { name: "Neue Baustelle" })).toBeNull();
+    });
+
+    await waitFor(() => {
+      expect(meldung()).toContain("angelegt");
+    });
+    expect(meldung()).toContain("Suedpark Ost (geprueft)");
+    expect(meldungsBereich().getAttribute("role")).toBe("status");
+    expect(meldungsBereich().getAttribute("aria-live")).toBe("polite");
+  });
+
+  it("behauptet bei einer fehlgeschlagenen Anlage keinen Erfolg", async () => {
+    const nutzer = userEvent.setup();
+
+    apiPost.mockRejectedValue(
+      new ApiProblemError({
+        type: "urn:easytree-prototype:problem:VALIDATION_FAILED",
+        title: "Die Eingabe ist nicht gueltig.",
+        status: 400,
+        detail: "name: Pflichtfeld",
+        correlationId: "test",
+      }),
+    );
+
+    const formular = await baustelleAnlegen(nutzer);
+
+    await nutzer.click(within(formular).getByRole("button", { name: "Baustelle speichern" }));
+
+    await waitFor(() => {
+      expect(within(formular).getByRole("alert").textContent).toContain("nicht gueltig");
+    });
+
+    expect(meldung()).toBe("");
   });
 });

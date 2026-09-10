@@ -33,7 +33,17 @@ export function EngagementDrawer({
   onCreated,
 }: {
   readonly onClose: () => void;
-  readonly onCreated: (ergebnis: EngagementCreated) => void;
+  /**
+   * Der Titel wandert mit nach oben (EYT-175): UX-020 verlangt eine
+   * Erfolgsmeldung, die den Einsatz identifizierbar nennt, und
+   * `EngagementCreated` traegt nur Ids und Datumswerte. Der Titel ist genau
+   * der Wert, den der Server soeben angenommen hat - `entwurf.title` ist das
+   * Feld, das im Rumpf von `POST /api/einsaetze` steht.
+   *
+   * Die Meldung selbst entsteht bewusst NICHT hier: dieser Drawer wird beim
+   * Erfolg aus dem Baum genommen und naehme sie mit.
+   */
+  readonly onCreated: (ergebnis: EngagementCreated, titel: string) => void;
 }) {
   const titelId = useId();
   const titelFehlerId = useId();
@@ -146,7 +156,16 @@ export function EngagementDrawer({
                 setTitel(event.target.value);
                 setTitelFehler(null);
               }}
-              className="rounded border border-line bg-surface p-2"
+              /*
+               * min-h-11 = 44 CSS-Pixel (WCAG 2.5.5, EYT-176).
+               *
+               * `p-2` allein ergab 42 px (Text 16 px, Zeilenbox 24, plus 2x8 Innenabstand,
+               * plus 2 px Rahmen), ein `select` sogar nur 38. Gemessen im Produktionsbuild
+               * bei 375, 325 und 320 px - dieselbe Zahl auf jeder Breite, denn die Hoehe
+               * haengt nicht am Viewport. Die Untergrenze steht an jedem Feld dieser Datei;
+               * eine eigene Abstraktion fuer einen CSS-Wert waere mehr Apparat als Nutzen.
+               */
+              className="min-h-11 rounded border border-line bg-surface p-2"
             />
             {titelFehler !== null && (
               <p id={titelFehlerId} role="alert" className="text-danger-text">
@@ -178,7 +197,7 @@ export function EngagementDrawer({
           employees={stammdaten.employees}
           resources={stammdaten.resources}
           idempotencyKey={schluessel}
-          onCreated={onCreated}
+          onCreated={(ergebnis) => onCreated(ergebnis, entwurf.title)}
         />
       )}
     </Drawer>

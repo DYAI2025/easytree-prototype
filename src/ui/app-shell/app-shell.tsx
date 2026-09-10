@@ -17,10 +17,16 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/*
        * sr-only benutzt position:absolute und 1px Groesse, NICHT display:none.
        * Das Element bleibt dadurch fokussierbar und ist das erste Tab-Ziel.
+       *
+       * Die 44-px-Untergrenze haengt ausdruecklich an `focus:` (EYT-176). Im
+       * Ruhezustand ist der Link unsichtbar und damit keine Bedienflaeche -
+       * dort etwas zu erzwingen wuerde nur den sr-only-Vertrag brechen. Erst im
+       * Fokus wird er sichtbar und anklickbar; gemessen war er dann 120,7x24,
+       * mit inline-flex und der Untergrenze sind es 120,7x44.
        */}
       <a
         href="#hauptinhalt"
-        className="sr-only rounded bg-action px-4 py-2 text-action-contrast focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50"
+        className="sr-only rounded bg-action px-4 py-2 text-action-contrast focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:inline-flex focus:min-h-11 focus:items-center"
       >
         Zum Hauptinhalt
       </a>

@@ -12,6 +12,7 @@ import {
 } from "../../domain/month-grid";
 import { parseLocalDate, type LocalDate } from "../../domain/local-date";
 import { DayCardStack, type DayCardModel } from "./day-card";
+import { DayIndicator, DayList } from "./day-compact";
 import { MonthGrid } from "./month-grid";
 import { MonthToolbar } from "./month-toolbar";
 import {
@@ -20,6 +21,12 @@ import {
   type PlanungsViewState,
 } from "./planning-view-state";
 import { Button } from "../primitives/button";
+import { Toast, useErfolg } from "../feedback/toast";
+import {
+  baustellentagGespeichert,
+  einsatzAngelegt,
+  serieUebernommen,
+} from "../feedback/erfolgstexte";
 import { EngagementDrawer } from "../engagement/engagement-drawer";
 import { DayDrawer, type DayChangeEntwurf } from "../day/day-drawer";
 import { SeriesPreviewDialog, type SeriesNamen } from "../day/series-preview-dialog";
@@ -63,13 +70,34 @@ export function PlanungsAnsicht({
     namen: SeriesNamen;
   } | null>(null);
 
+  /**
+   * Erfolgsbestaetigung nach Schreibaktionen (EYT-175).
+   *
+   * Sie liegt HIER und nicht in den Drawern: Tagesdrawer, Serienvorschau und
+   * Anlage-Assistent werden beim Erfolg aus dem Baum genommen (siehe die
+   * bedingten Zweige unten), eine Meldung in ihnen waere im selben Moment weg.
+   * Diese Komponente bleibt stehen - auch ueber `router.refresh()` hinweg, das
+   * den Serverzustand neu holt, den Client-Baum aber erhaelt.
+   */
+  const { meldung, melde, loesche } = useErfolg();
+
   const gehe = useCallback(
     (ziel: PlanungsUrlEingabe): void => {
+      /*
+       * Jede Navigation raeumt die alte Bestaetigung weg - ein Monatswechsel
+       * oder ein neu geoeffneter Drawer soll nicht noch den Satz der letzten
+       * Aktion tragen. Die Erfolgswege melden NACH `gehe`, ihr Satz ueberlebt
+       * das Aufraeumen deshalb (React fasst beide Zustandsaenderungen zu einem
+       * Rendern zusammen).
+       */
+      loesche();
       // scroll: false - ein geoeffneter Drawer darf die Kalenderposition nicht
       // an den Seitenanfang reissen.
       router.push(planungsUrl(ziel), { scroll: false });
     },
-    [router],
+    // `loesche` ist stabil (useCallback ohne Abhaengigkeiten); `gehe` bleibt
+    // damit referenzstabil und die Memos darunter rechnen nicht neu.
+    [loesche, router],
   );
 
   /** Drawer zu: die Drawer-Parameter fallen weg, der Monat bleibt stehen. */
@@ -87,7 +115,14 @@ export function PlanungsAnsicht({
 
   const grid: MonthGridModel = useMemo(() => buildMonthGrid(view.month), [view.month]);
 
-  const { cardsByDate, countsByDate } = useMemo(() => {
+  /**
+   * Der ausgewaehlte Tag der Kompaktform. Er steht in derselben URL wie jeder
+   * andere Ansichtszustand (`?monat=…&tag=…`) - eine Auswahl im React-State
+   * ueberlebte keinen Reload und waere nicht teilbar (Befund B-05).
+   */
+  const ausgewaehlterTag = viewState.tag ?? null;
+
+  const { cardsByDate, countsByDate, indicatorsByDate, kartenProTag } = useMemo(() => {
     const proTag = new Map<string, DayCardModel[]>();
 
     for (const card of view.cards) {
@@ -106,6 +141,7 @@ export function PlanungsAnsicht({
 
     const knoten: Record<string, ReactNode> = {};
     const zahlen: Record<string, number> = {};
+    const indikatoren: Record<string, ReactNode> = {};
 
     for (const [datum, karten] of proTag) {
       zahlen[datum] = karten.length;
@@ -117,10 +153,25 @@ export function PlanungsAnsicht({
           }
         />
       );
+      indikatoren[datum] = (
+        <DayIndicator
+          date={parseLocalDate(datum)}
+          cards={karten}
+          selected={datum === ausgewaehlterTag}
+          // Auswaehlen ist KEIN Oeffnen: der Tag wandert in die URL, die
+          // Tagesliste unter dem Raster zeigt danach seine Karten.
+          onSelect={(tag) => gehe({ monat: view.month, tag })}
+        />
+      );
     }
 
-    return { cardsByDate: knoten, countsByDate: zahlen };
-  }, [gehe, view.cards, view.month]);
+    return {
+      cardsByDate: knoten,
+      countsByDate: zahlen,
+      indicatorsByDate: indikatoren,
+      kartenProTag: proTag,
+    };
+  }, [ausgewaehlterTag, gehe, view.cards, view.month]);
 
   // Die Balken kommen aus denselben Karten wie die Tageskarten: ein Einsatz
   // ist an genau den Tagen geplant, an denen er eine Karte hat.
@@ -160,6 +211,14 @@ export function PlanungsAnsicht({
         onCreate={() => oeffneAnlage()}
       />
 
+      {/*
+        Der Live-Bereich steht IMMER hier, auch ohne Meldung - siehe die
+        Begruendung an `Toast`. Ohne Meldung traegt er `sr-only`, ist also
+        absolut positioniert und damit kein Flex-Item: er belegt weder Hoehe
+        noch einen zusaetzlichen `gap` dieser Spalte.
+      */}
+      <Toast text={meldung?.text ?? null} nummer={meldung?.nummer} />
+
       {view.cards.length === 0 && (
         <div className="rounded border border-line bg-surface p-4">
           <p className="font-medium">Keine Einsaetze in diesem Monat</p>
@@ -177,6 +236,7 @@ export function PlanungsAnsicht({
         today={parseLocalDate(view.today)}
         labelledBy="monatstitel"
         cardsByDate={cardsByDate}
+        indicatorsByDate={indicatorsByDate}
         countsByDate={countsByDate}
         spans={spans}
         colourByEngagement={colourByEngagement}
@@ -184,13 +244,43 @@ export function PlanungsAnsicht({
         onMonthChange={(richtung) => wechsleMonat(addMonths(view.month, richtung))}
       />
 
+      {/*
+        Die Tagesliste ist die zweite Haelfte der Kompaktform (Plan 6.2): das
+        Raster zeigt unter 768 px nur noch Punkte und Zaehler, die Karten
+        stehen hier. Ab md blendet die Liste sich selbst aus - dort tragen die
+        Zellen die Karten wieder.
+      */}
+      {ausgewaehlterTag !== null && (kartenProTag.get(ausgewaehlterTag)?.length ?? 0) > 0 && (
+        <DayList
+          date={parseLocalDate(ausgewaehlterTag)}
+          cards={kartenProTag.get(ausgewaehlterTag)!}
+          onOpen={(worksiteDayId) =>
+            gehe({
+              monat: view.month,
+              tag: ausgewaehlterTag,
+              drawer: "tag",
+              id: worksiteDayId,
+            })
+          }
+        />
+      )}
+
       {viewState.drawer === "tag" && (
         <DayDrawer
           key={viewState.worksiteDayId}
           worksiteDayId={viewState.worksiteDayId}
           today={view.today}
           onClose={schliesse}
-          onSaved={nachAenderung}
+          onSaved={() => {
+            nachAenderung();
+            /*
+             * Nach `nachAenderung`, nicht davor: dessen `gehe` raeumt die alte
+             * Bestaetigung weg. Das Datum kommt aus `viewState.tag`, und das
+             * hat `resolvePlanungsViewState` aus dem LESEMODELL genommen
+             * (`karte.date`), nicht aus der URL - die koennte luegen.
+             */
+            melde(baustellentagGespeichert(viewState.tag));
+          }}
           onShowCosts={(engagementId) =>
             // Der Tageskontext bleibt in der URL stehen: der Kosten-Drawer ist
             // von diesem Tag aus geoeffnet worden (Produktinvariante 7).
@@ -202,6 +292,23 @@ export function PlanungsAnsicht({
             })
           }
           onSeriesPreview={(entwurf, detail, namen) => setSerie({ entwurf, detail, namen })}
+          /*
+           * Fokusrueckgabe, wenn der Ausloeser das Schliessen nicht ueberlebt
+           * (EYT-174). Unterhalb des md-Umbruchs kommt der Klick aus der
+           * Tagesliste, und die faellt mit `tag` aus der URL weg - die Karte,
+           * die den Drawer geoeffnet hat, gibt es danach nicht mehr.
+           *
+           * Der Ersatz ist deshalb die Flaeche, ueber die GENAU DIESER Tag
+           * weiter bedienbar ist: sein Kompaktindikator. Bewusst kein Griff
+           * nach "der ersten Tageskarte" - die gehoerte irgendeinem Tag. Der
+           * Drawer fragt hier nur, wenn der echte Ausloeser weg ist; auf dem
+           * Desktop ueberlebt er und dieser Zweig wird nie erreicht.
+           */
+          restoreFocusFallback={() =>
+            document.querySelector<HTMLElement>(
+              `[role="gridcell"][data-datum="${viewState.tag}"] [data-testid="tagesindikator"]`,
+            )
+          }
         />
       )}
 
@@ -220,9 +327,13 @@ export function PlanungsAnsicht({
           entwurf={serie.entwurf}
           namen={serie.namen}
           onClose={() => setSerie(null)}
-          onApplied={() => {
+          onApplied={(ergebnis) => {
             setSerie(null);
             nachAenderung();
+            // `updatedDayIds` ist die Zahl der wirklich geschriebenen Tage.
+            // Die Zieltage der Vorschau koennen groesser sein - ausgeschlossene
+            // und gesperrte Tage stehen dort mit drin.
+            melde(serieUebernommen(ergebnis.updatedDayIds.length));
           }}
         />
       )}
@@ -230,10 +341,17 @@ export function PlanungsAnsicht({
       {viewState.drawer === "neu" && (
         <EngagementDrawer
           onClose={schliesse}
-          onCreated={() => {
+          onCreated={(ergebnis, titel) => {
             // Die Servertruth hat sich geaendert; ohne refresh zeigte der
             // Kalender weiter den Stand von vor der Anlage.
             nachAenderung();
+            /*
+             * UX-020 verlangt Name UND Anzahl. Die Anzahl ist die Laenge von
+             * `worksiteDayIds` aus der 201-Antwort - die Tage, die der Server
+             * wirklich materialisiert hat. Die im Assistenten abgeleitete
+             * Vorschau waere eine Schaetzung und kann abweichen.
+             */
+            melde(einsatzAngelegt(titel, ergebnis.worksiteDayIds.length));
           }}
         />
       )}

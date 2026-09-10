@@ -11,6 +11,8 @@ import type { Worksite } from "../../contracts/worksite";
 import { ApiProblemError, apiPatch, apiPost } from "../../lib/api-client";
 import { AddressSearch, type AddressSearchValue } from "./address-search";
 import { Button } from "../primitives/button";
+import { baustelleAngelegt } from "../feedback/erfolgstexte";
+import { Toast, useErfolg } from "../feedback/toast";
 
 /**
  * Stammdatenpflege Auftraggeber und ihre Baustellen (REQ-F-003, REQ-F-004).
@@ -60,9 +62,21 @@ export function CustomerPanel({ customers, worksites }: CustomerPanelProps) {
     [worksites, gewaehlt],
   );
 
+  /**
+   * Erfolgsbestaetigung nach der Baustellenanlage (EYT-175, UX-051).
+   *
+   * Sie liegt im Panel und nicht im Formular: `fertig()` nimmt das Formular
+   * unmittelbar aus dem Baum (`setFormular(null)`), eine Meldung in ihm waere
+   * im selben Moment verschwunden.
+   */
+  const { meldung, melde, loesche } = useErfolg();
+
   const fertig = (): void => {
     setFormular(null);
     setBearbeiteteBaustelle(null);
+    // Aufraeumen als Grundregel; die Anlage meldet danach und ueberschreibt
+    // das im selben Rendern.
+    loesche();
     router.refresh();
   };
 
@@ -74,11 +88,18 @@ export function CustomerPanel({ customers, worksites }: CustomerPanelProps) {
           onClick={() => {
             setBearbeiteteBaustelle(null);
             setFormular("kunde");
+            loesche();
           }}
         >
           Neuer Auftraggeber
         </Button>
       </div>
+
+      {/*
+        Der Live-Bereich steht immer im Dokument; ohne Meldung traegt er
+        `sr-only` und belegt keinen Platz. Siehe die Begruendung an `Toast`.
+      */}
+      <Toast text={meldung?.text ?? null} nummer={meldung?.nummer} />
 
       {formular === "kunde" && <KundeForm onSaved={fertig} onCancel={() => setFormular(null)} />}
 
@@ -100,7 +121,15 @@ export function CustomerPanel({ customers, worksites }: CustomerPanelProps) {
                       setFormular(null);
                       setBearbeiteteBaustelle(null);
                     }}
-                    className="w-full rounded border border-line px-3 py-2 text-left aria-[current]:bg-canvas"
+                    /*
+                     * min-h-11 = 44 CSS-Pixel (WCAG 2.5.5, EYT-176).
+                     *
+                     * Dieser Knopf ist die Auswahl des Auftraggebers und geht bewusst
+                     * nicht ueber das Button-Primitive: er ist eine ganze Listenzeile,
+                     * linksbuendig und ueber die volle Breite. Die 44-px-Untergrenze
+                     * des Primitives hat ihn deshalb nie erreicht - gemessen 343x42.
+                     */
+                    className="min-h-11 w-full rounded border border-line px-3 py-2 text-left aria-[current]:bg-canvas"
                   >
                     {eintrag.name}
                     {!eintrag.active && <span className="text-ink-muted"> · inaktiv</span>}
@@ -119,6 +148,7 @@ export function CustomerPanel({ customers, worksites }: CustomerPanelProps) {
                 onClick={() => {
                   setBearbeiteteBaustelle(null);
                   setFormular("baustelle");
+                  loesche();
                 }}
               >
                 Neue Baustelle
@@ -128,7 +158,19 @@ export function CustomerPanel({ customers, worksites }: CustomerPanelProps) {
             {kunde.contact !== null && <p className="text-ink-muted">Kontakt: {kunde.contact}</p>}
 
             {formular === "baustelle" && (
-              <BaustelleForm kunde={kunde} onSaved={fertig} onCancel={() => setFormular(null)} />
+              <BaustelleForm
+                kunde={kunde}
+                onSaved={(angelegt) => {
+                  fertig();
+
+                  if (angelegt !== null) {
+                    // Der Name kommt aus der Serverantwort, nicht aus dem
+                    // Formularfeld - sonst laese der Client sich selbst vor.
+                    melde(baustelleAngelegt(angelegt.name));
+                  }
+                }}
+                onCancel={() => setFormular(null)}
+              />
             )}
 
             {baustellen.length === 0 ? (
@@ -231,7 +273,16 @@ function KundeForm({ onSaved, onCancel }: { onSaved: () => void; onCancel: () =>
         id={nameId}
         {...form.register("name")}
         aria-invalid={nameFehler === undefined ? undefined : true}
-        className="rounded border border-line bg-surface p-2"
+        /*
+         * min-h-11 = 44 CSS-Pixel (WCAG 2.5.5, EYT-176).
+         *
+         * `p-2` allein ergab 42 px (Text 16 px, Zeilenbox 24, plus 2x8 Innenabstand,
+         * plus 2 px Rahmen), ein `select` sogar nur 38. Gemessen im Produktionsbuild
+         * bei 375, 325 und 320 px - dieselbe Zahl auf jeder Breite, denn die Hoehe
+         * haengt nicht am Viewport. Die Untergrenze steht an jedem Feld dieser Datei;
+         * eine eigene Abstraktion fuer einen CSS-Wert waere mehr Apparat als Nutzen.
+         */
+        className="min-h-11 rounded border border-line bg-surface p-2"
       />
       {nameFehler !== undefined && (
         <p role="alert" className="text-danger-text">
@@ -245,7 +296,7 @@ function KundeForm({ onSaved, onCancel }: { onSaved: () => void; onCancel: () =>
       <input
         id={kontaktId}
         {...form.register("contact")}
-        className="rounded border border-line bg-surface p-2"
+        className="min-h-11 rounded border border-line bg-surface p-2"
       />
 
       <label htmlFor={notizId} className="font-medium">
@@ -254,7 +305,7 @@ function KundeForm({ onSaved, onCancel }: { onSaved: () => void; onCancel: () =>
       <textarea
         id={notizId}
         {...form.register("notes")}
-        className="rounded border border-line bg-surface p-2"
+        className="min-h-11 rounded border border-line bg-surface p-2"
       />
 
       {fehler !== null && (
@@ -281,7 +332,16 @@ function BaustelleForm({
 }: {
   readonly kunde: Customer;
   readonly worksite?: Worksite;
-  readonly onSaved: () => void;
+  /**
+   * Bekommt die ANGELEGTE Baustelle, wie der Server sie zurueckgibt - und
+   * `null`, wenn eine bestehende geaendert wurde (EYT-175).
+   *
+   * Die Unterscheidung ist der Grund fuer den Parameter: UX-051 verlangt eine
+   * Bestaetigung fuer die ANLAGE. Die Aenderung einer bestehenden Baustelle
+   * gehoert nicht zu den vier geprueften Schreibpfaden dieses Tickets und darf
+   * deshalb hier auch keine Meldung erzeugen.
+   */
+  readonly onSaved: (angelegt: Worksite | null) => void;
   readonly onCancel: () => void;
 }) {
   const kundeId = useId();
@@ -346,12 +406,11 @@ function BaustelleForm({
 
     try {
       if (worksite === undefined) {
-        await apiPost<Worksite>("/api/baustellen", { customerId: kunde.id, ...koerper });
+        onSaved(await apiPost<Worksite>("/api/baustellen", { customerId: kunde.id, ...koerper }));
       } else {
         await apiPatch<Worksite>(`/api/baustellen/${worksite.id}`, koerper);
+        onSaved(null);
       }
-
-      onSaved();
     } catch (ursache) {
       setFehler(ursache instanceof ApiProblemError ? ursache.title : "Speichern fehlgeschlagen.");
     }
@@ -388,7 +447,7 @@ function BaustelleForm({
         id={nameId}
         {...form.register("name")}
         aria-invalid={nameFehler === undefined ? undefined : true}
-        className="rounded border border-line bg-surface p-2"
+        className="min-h-11 rounded border border-line bg-surface p-2"
       />
       {nameFehler !== undefined && (
         <p role="alert" className="text-danger-text">
@@ -415,7 +474,7 @@ function BaustelleForm({
       <textarea
         id={notizId}
         {...form.register("notes")}
-        className="rounded border border-line bg-surface p-2"
+        className="min-h-11 rounded border border-line bg-surface p-2"
       />
 
       {fehler !== null && (
