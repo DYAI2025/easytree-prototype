@@ -64,6 +64,42 @@ const eslintConfig = [
       ],
     },
   },
+  {
+    // Browser-Speicher-Grenze (REQ-NF-001, TASK-050 Guard 1): fachlicher
+    // Zustand liegt auf dem Server. Ansichtszustand steht in der URL,
+    // Formularzustand in der React-Instanz des Drawers.
+    //
+    // no-restricted-imports kann diese Grenze nicht ausdruecken - localStorage
+    // ist kein Modul, sondern ein Global. Beide Zugriffswege sind erfasst: der
+    // blosse Bezeichner und der Umweg ueber window.
+    files: ["src/ui/**/*.{ts,tsx}", "src/app/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-globals": [
+        "error",
+        {
+          name: "localStorage",
+          message: "Fachlicher Zustand gehoert auf den Server (REQ-NF-001).",
+        },
+        {
+          name: "sessionStorage",
+          message: "Fachlicher Zustand gehoert auf den Server (REQ-NF-001).",
+        },
+      ],
+      "no-restricted-properties": [
+        "error",
+        {
+          object: "window",
+          property: "localStorage",
+          message: "Fachlicher Zustand gehoert auf den Server (REQ-NF-001).",
+        },
+        {
+          object: "window",
+          property: "sessionStorage",
+          message: "Fachlicher Zustand gehoert auf den Server (REQ-NF-001).",
+        },
+      ],
+    },
+  },
 ];
 
 export default eslintConfig;
