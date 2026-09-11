@@ -757,50 +757,116 @@ test.describe("EYT-176 Bedienung nach der Vergroesserung", () => {
    * tun; eine Zusicherung darauf wuerde eine Eigenart des Testwerkzeugs
    * beschreiben, nicht das Produkt.
    */
-  test("die Zeitfelder bleiben per Zeiger und per Tastatur bedienbar", async ({ page }) => {
-    await page.setViewportSize({ width: 375, height: 900 });
-    await tagesdrawer(page);
+  for (const breite of BREITEN) {
+    test(`bei ${breite} px bleiben die Zeitfelder per Zeiger und per Tastatur bedienbar`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: breite, height: 900 });
+      await tagesdrawer(page);
 
-    const drawer = page.getByRole("dialog");
-    const beginn = drawer.getByLabel("Beginn", { exact: true });
-    const ende = drawer.getByLabel("Ende", { exact: true });
-    const kasten = await beginn.boundingBox();
+      const drawer = page.getByRole("dialog");
+      const beginn = drawer.getByLabel("Beginn", { exact: true });
+      const ende = drawer.getByLabel("Ende", { exact: true });
 
-    expect(kasten!.height).toBeGreaterThanOrEqual(MINDESTZIEL);
+      /*
+       * Erst scrollen, dann messen - in dieser Reihenfolge.
+       *
+       * Der Drawer IST die Scrollflaeche (`fixed inset-y-0 ... overflow-y-auto`):
+       * bei 375 px gemessen 1304 px Inhalt in 900 px Fenster. Die Zeitfelder
+       * liegen am unteren Ende, also je nach Kopfhoehe innerhalb oder unterhalb
+       * des sichtbaren Ausschnitts. `boundingBox()` scrollt NICHT; es liefert
+       * auch fuer einen weggescrollten Kasten ein Rechteck. Ein daraus
+       * gerechneter Punkt kann deshalb ausserhalb des Fensters liegen, und ein
+       * Klick dorthin trifft nichts.
+       *
+       * Genau daran ist der Test in CI gescheitert (Run 34594963808): dort
+       * umbricht die Kopfzeile "Parkanlage Nordring - Stadtwerke Musterstadt"
+       * unter der dortigen `system-ui`-Ersatzschrift auf zwei Zeilen, der
+       * Kasten rutscht um eine Zeilenhoehe (24 px) nach unten, und der Klick
+       * landete auf y=921 bei 900 px Fensterhoehe. Lokal auf macOS umbricht
+       * dieselbe Zeile bei 375 px nicht - der Kasten endete dort auf exakt
+       * 900,0 px, also mit null Pixeln Reserve. Die Zusicherung hing damit an
+       * einer Schriftmetrik, nicht am Produkt.
+       *
+       * Deshalb laeuft diese Pruefung ueber alle drei Pflichtbreiten: bei
+       * 325 und 320 px umbricht dieselbe Zeile auch lokal, der Fehler ist also
+       * reproduzierbar und nicht nur in CI sichtbar.
+       *
+       * Wer das Feld bedienen will, scrollt hin. Der Test tut dasselbe - das
+       * schwaecht nichts ab: gemessen und geklickt wird danach weiterhin der
+       * echte Kasten, nur eben der ANGEZEIGTE.
+       */
+      await beginn.scrollIntoViewIfNeeded();
 
-    /*
-     * Zeiger: der Klick sitzt 3 px ueber der Unterkante, also in dem Streifen,
-     * den es vor der Untergrenze gar nicht gab (vorher 42 px). Er muss GENAU
-     * dieses Feld fokussieren - nicht das Feld darunter und nicht ins Leere.
-     */
-    await page.mouse.click(kasten!.x + 20, kasten!.y + kasten!.height - 3);
+      const kasten = (await beginn.boundingBox())!;
 
-    const getroffen = await page.evaluate(() => ({
-      typ: document.activeElement?.getAttribute("type") ?? null,
-      id: document.activeElement?.id ?? null,
-    }));
+      expect(kasten.height).toBeGreaterThanOrEqual(MINDESTZIEL);
 
-    expect(getroffen.typ).toBe("time");
-    expect(getroffen.id).toBe(await beginn.getAttribute("id"));
+      /*
+       * Zeiger: der Klick sitzt 3 px ueber der Unterkante, also in dem Streifen,
+       * den es vor der Untergrenze gar nicht gab (vorher 42 px). Er muss GENAU
+       * dieses Feld fokussieren - nicht das Feld darunter und nicht ins Leere.
+       */
+      const zeigerX = kasten.x + 20;
+      const zeigerY = kasten.y + kasten.height - 3;
 
-    // Der Wert ist aenderbar und wieder leerbar - der Fluss "Arbeitszeit ist
-    // optional" bleibt unveraendert.
-    await beginn.fill("08:15");
-    await expect(beginn).toHaveValue("08:15");
-    await ende.fill("17:30");
-    await expect(ende).toHaveValue("17:30");
-    await beginn.fill("");
-    await expect(beginn).toHaveValue("");
-    await expect(drawer.getByRole("button", { name: "Speichern" })).toBeEnabled();
+      /*
+       * Vor dem Klick: liegt der Punkt ueberhaupt auf dem Feld?
+       *
+       * Ohne diese Zusicherung meldet ein Griff ins Leere nur "activeElement
+       * ist null" - das liest sich wie ein Fokusproblem und hat in CI genau
+       * deshalb in die falsche Richtung gezeigt. Der Treffertest benennt den
+       * Unterschied zwischen "Feld nimmt den Klick nicht an" und "Punkt liegt
+       * gar nicht auf dem Feld".
+       */
+      const unterDemZeiger = await page.evaluate(
+        ({ x, y }) => {
+          const treffer = document.elementFromPoint(x, y);
 
-    // Tastatur: ohne Maus erreichbar. `.focus()` waere kein Nachweis - es
-    // beweist nicht, dass das Feld im Tabweg ueberhaupt vorkommt.
-    await drawer.getByLabel("Hinweis", { exact: true }).focus();
-    await page.keyboard.press("Shift+Tab");
-    await page.keyboard.press("Shift+Tab");
+          return {
+            imFenster: x >= 0 && x < window.innerWidth && y >= 0 && y < window.innerHeight,
+            marke: treffer?.tagName ?? null,
+            id: treffer instanceof HTMLElement ? treffer.id : null,
+          };
+        },
+        { x: zeigerX, y: zeigerY },
+      );
 
-    expect(await page.evaluate(() => document.activeElement?.getAttribute("type"))).toBe("time");
-  });
+      expect(unterDemZeiger.imFenster).toBe(true);
+      expect(unterDemZeiger.marke).toBe("INPUT");
+      expect(unterDemZeiger.id).toBe(await beginn.getAttribute("id"));
+
+      await page.mouse.click(zeigerX, zeigerY);
+
+      const getroffen = await page.evaluate(() => ({
+        typ: document.activeElement?.getAttribute("type") ?? null,
+        id: document.activeElement?.id ?? null,
+      }));
+
+      expect(getroffen.typ).toBe("time");
+      // Genau dieses Feld - nicht das Feld "Ende" darunter. Das ist die
+      // Nachbarzusicherung dieses Paares.
+      expect(getroffen.id).toBe(await beginn.getAttribute("id"));
+
+      // Der Wert ist aenderbar und wieder leerbar - der Fluss "Arbeitszeit ist
+      // optional" bleibt unveraendert.
+      await beginn.fill("08:15");
+      await expect(beginn).toHaveValue("08:15");
+      await ende.fill("17:30");
+      await expect(ende).toHaveValue("17:30");
+      await beginn.fill("");
+      await expect(beginn).toHaveValue("");
+      await expect(drawer.getByRole("button", { name: "Speichern" })).toBeEnabled();
+
+      // Tastatur: ohne Maus erreichbar. `.focus()` waere kein Nachweis - es
+      // beweist nicht, dass das Feld im Tabweg ueberhaupt vorkommt.
+      await drawer.getByLabel("Hinweis", { exact: true }).focus();
+      await page.keyboard.press("Shift+Tab");
+      await page.keyboard.press("Shift+Tab");
+
+      expect(await page.evaluate(() => document.activeElement?.getAttribute("type"))).toBe("time");
+    });
+  }
 
   test("die Selects des Assistenten waehlen weiter genau den gemeinten Eintrag", async ({
     page,
