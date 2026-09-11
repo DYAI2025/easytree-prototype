@@ -60,6 +60,60 @@ function Betrag({ amountMinorUnits }: { readonly amountMinorUnits: string | null
   return <span>{formatEuro(amountMinorUnits)}</span>;
 }
 
+/**
+ * Erlaubte Umbruchstelle langer, zusammengesetzter Spaltenkoepfe - als INDEX im
+ * Titel, nicht als zwei Textstuecke. Dadurch ist der gerenderte Kopf per
+ * Konstruktion derselbe String wie der Titel; ein Tippfehler kann die
+ * Beschriftung nicht heimlich veraendern.
+ *
+ * Warum es diese Stelle ueberhaupt braucht (gemessen im Produktionsbuild,
+ * 1440x900, Kostendrawer `Nach Tag`):
+ *
+ * Der Drawer ist `max-w-md` breit, abzueglich seiner 16 px Innenabstand bleiben
+ * 415 px nutzbare Breite. Die vier Spalten standen bereits alle auf ihrer
+ * min-content-Breite (100,14 + 118,89 + 68,02 + 147,69 = 434,73 px), die
+ * Tabelle war also 19,73 px breiter als ihr Scrollbereich. Die letzte Spalte
+ * traegt diesen Ueberstand, und ihre Breite kam als einzige NICHT aus den
+ * Daten, sondern aus dem Kopf selbst: "Zwischensumme" ist ein einziges,
+ * unumbrechbares Wort von 131,69 px. Im Ruhezustand (scrollLeft 0) fehlten
+ * dadurch die rechten 11,73 px - das Wort war mitten im Buchstaben
+ * abgeschnitten.
+ *
+ * Eine Zeile passt bei dieser Drawer-Breite rechnerisch nicht: fuer den Kopf
+ * blieben 415 - (100,14 + 118,89 + 68,02) = 127,95 px, das Wort braucht mit
+ * Innenabstand 147,69 px. Also MUSS er umbrechen duerfen. `<wbr>` erlaubt genau
+ * einen Umbruch an der Fugenstelle des Kompositums ("Zwischen" | "summe") und
+ * begrenzt damit auch die min-content-Breite der Spalte auf die laengere
+ * Haelfte. Nichts wird gekuerzt, abgekuerzt, verkleinert oder ausgeblendet:
+ * `textContent` und damit der Name fuer Screenreader bleiben exakt
+ * "Zwischensumme".
+ *
+ * Bewusst kein `hyphens: auto` (haengt an einer Trennmuster-Datei, die ein
+ * headless Chromium nicht sicher mitbringt), kein weiches Trennzeichen (\u00AD
+ * stuende im Text) und kein `overflow-wrap: anywhere` (bricht irgendwo:
+ * gemessen "Zwischensum|me").
+ */
+const KOPF_UMBRUCH: Readonly<Record<string, number>> = {
+  Zwischensumme: "Zwischen".length,
+};
+
+/** Spaltenkopf mit optionaler Umbruchstelle - der Text bleibt unveraendert. */
+function Spaltenkopf({ titel }: { readonly titel: string }) {
+  const stelle = KOPF_UMBRUCH[titel];
+
+  if (stelle === undefined) {
+    return <>{titel}</>;
+  }
+
+  return (
+    <>
+      {titel.slice(0, stelle)}
+      <wbr />
+      {titel.slice(stelle)}
+    </>
+  );
+}
+
 function Tabelle({
   kopf,
   beschriftung,
@@ -86,7 +140,7 @@ function Tabelle({
           <tr>
             {kopf.map((titel) => (
               <th key={titel} scope="col" className="border-b border-line p-2 text-left">
-                {titel}
+                <Spaltenkopf titel={titel} />
               </th>
             ))}
           </tr>

@@ -201,6 +201,26 @@ describe("CostDrawer", () => {
     expect(fussnote).toHaveTextContent("keine Lohn- oder Buchhaltungsdaten");
   });
 
+  /*
+   * Die Umbruchstelle im Kopf "Zwischensumme" (TASK-049) darf die Beschriftung
+   * NICHT veraendern: <wbr> ist eine Umbruchgelegenheit, kein Zeichen. Geprueft
+   * wird der zugaengliche Name - haette die Reparatur gekuerzt, abgekuerzt oder
+   * ein weiches Trennzeichen eingefuegt, stuende hier ein anderer String.
+   */
+  it("beschriftet die Spalten der Tagestabelle unveraendert", async () => {
+    zeichnen();
+
+    const koepfe = await screen.findAllByRole("columnheader");
+
+    expect(koepfe.map((kopf) => kopf.textContent)).toEqual([
+      "Datum",
+      "Position",
+      "Betrag",
+      "Zwischensumme",
+    ]);
+    expect(koepfe[3]).toHaveAccessibleName("Zwischensumme");
+  });
+
   it("legt jede Tabelle in einen horizontal scrollbaren Container", async () => {
     const nutzer = userEvent.setup();
 

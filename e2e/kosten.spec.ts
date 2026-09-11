@@ -95,6 +95,92 @@ test.describe("kosten", () => {
   });
 
   /*
+   * TASK-049 / Sichtpruefung 09: die Spaltenkoepfe der Tagestabelle muessen im
+   * Ruhezustand VOLLSTAENDIG lesbar sein - "Zwischensumme" wurde am rechten
+   * Rand mitten im Wort abgeschnitten.
+   *
+   * Gemessen wird Geometrie, nicht ein Bild und nicht eine bestimmte
+   * Schriftbreite: der gerenderte Textbereich jedes <th> muss innerhalb der
+   * SICHTBAREN Box seines Scrollbereichs liegen (scrollLeft 0). Das bleibt
+   * ueber unterschiedliche Font-Metriken hinweg gueltig und wird genau dann
+   * wieder rot, wenn ein Kopf erneut beschnitten wird.
+   *
+   * Bewusst nur bei 1440: unterhalb der Drawer-Breite uebernimmt das
+   * ausdruecklich erlaubte Querscrollen des Tabellenbereichs (REQ-NF-004), und
+   * dort ist ein rechts ueberstehender Kopf kein Defekt, sondern die geplante
+   * Bedienung. Der Befund der Sichtpruefung lag genau bei dieser Breite.
+   */
+  test("AC-10d: die Koepfe der Tagestabelle sind bei 1440 ohne Querscrollen vollstaendig sichtbar", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    const kosten = await kostenOeffnen(page, "2026-09-14", "Kronensicherung Allee");
+    const bereich = kosten.getByRole("region", { name: "Kosten nach Tag" });
+
+    await expect(bereich).toBeVisible();
+
+    const messung = await bereich.evaluate((region) => {
+      const sichtbar = region.getBoundingClientRect();
+      const koepfe = [...region.querySelectorAll("thead th")].map((th) => {
+        const textbereich = document.createRange();
+
+        textbereich.selectNodeContents(th);
+
+        const text = textbereich.getBoundingClientRect();
+
+        return {
+          titel: th.textContent ?? "",
+          // Positiv = der gerenderte Text steht rechts ueber die sichtbare Box
+          // hinaus und ist damit abgeschnitten.
+          ueberstandRechts: Number((text.right - sichtbar.right).toFixed(2)),
+          ueberstandLinks: Number((sichtbar.left - text.left).toFixed(2)),
+          textBreite: Number(text.width.toFixed(2)),
+          zeilen: textbereich.getClientRects().length,
+        };
+      });
+
+      return {
+        koepfe,
+        scrollLeft: region.scrollLeft,
+        tabIndex: region.tabIndex,
+        clientWidth: region.clientWidth,
+        scrollWidth: region.scrollWidth,
+        tabelleBreite: Number(
+          (region.querySelector("table")?.getBoundingClientRect().width ?? 0).toFixed(2),
+        ),
+        dokumentQuerlaeuft:
+          document.documentElement.scrollWidth > document.documentElement.clientWidth,
+      };
+    });
+
+    // Der Bereich bleibt ein benannter, per Tastatur erreichbarer Scrollbereich -
+    // die Reparatur darf ihn nicht abschaffen.
+    expect(messung.tabIndex).toBe(0);
+    expect(messung.scrollLeft).toBe(0);
+    expect(messung.dokumentQuerlaeuft).toBe(false);
+
+    // Kein Kopf wurde abgekuerzt, gekuerzt oder mit Auslassungszeichen ersetzt.
+    expect(messung.koepfe.map((kopf) => kopf.titel)).toEqual([
+      "Datum",
+      "Position",
+      "Betrag",
+      "Zwischensumme",
+    ]);
+
+    for (const kopf of messung.koepfe) {
+      expect(
+        kopf.ueberstandRechts,
+        `Kopf "${kopf.titel}" steht ${kopf.ueberstandRechts} px rechts ueber die sichtbare Box hinaus (Bereich ${messung.clientWidth} px, Tabelle ${messung.tabelleBreite} px)`,
+      ).toBeLessThanOrEqual(0.5);
+      expect(
+        kopf.ueberstandLinks,
+        `Kopf "${kopf.titel}" steht ${kopf.ueberstandLinks} px links ueber die sichtbare Box hinaus`,
+      ).toBeLessThanOrEqual(0.5);
+    }
+  });
+
+  /*
    * Produktinvariante 7: Kosten sind nie die Landeflaeche. Es gibt keinen
    * Navigationspunkt dorthin, und der Einstieg fuehrt in die Planung.
    */
