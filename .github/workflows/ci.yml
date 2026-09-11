@@ -88,16 +88,26 @@ jobs:
 
   e2e:
     name: e2e (playwright chromium)
+    # runs-on bleibt: Job- und Service-Container brauchen einen Linux-Runner als Host.
     runs-on: ubuntu-latest
+    # EYT-172A: E2E laeuft im selben versionsgepinnten Playwright-Image-Tag, in
+    # dem die *-linux.png-Baselines erzeugt werden. Direkt auf ubuntu-latest
+    # rendert system-ui mit DejaVu Sans (Ink-Breiten im CI-Run 34598711500), das
+    # Image hat kein DejaVu (fc-list: Liberation, FreeSans, WenQuanYi) - beides
+    # gemessen am 11.09.2026. Browser, OS-Bibliotheken und Fonts kommen allein
+    # aus dem Image. Gleicher Tag heisst nicht gleiches Binary: ubuntu-latest
+    # zieht das linux/amd64-Manifest, lokal auf Apple Silicon entsteht
+    # linux/arm64. Die Tag-Version MUSS @playwright/test in package.json folgen.
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
     services:
       postgres:
         image: postgres:17
         env:
           POSTGRES_PASSWORD: easytree
           POSTGRES_DB: easytree_prototype
-        # Der Job laeuft auf dem Runner, nicht im Container: Port mappen, Host 127.0.0.1.
-        ports:
-          - 5432:5432
+        # Der Job laeuft im Container: der Service ist im Job-Netzwerk ueber
+        # seinen Namen "postgres" erreichbar, ein Port-Mapping entfaellt.
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -105,16 +115,31 @@ jobs:
           --health-retries 5
     env:
       EASYTREE_FIXED_TODAY: "2026-09-01"
-      DATABASE_URL: postgres://postgres:easytree@127.0.0.1:5432/easytree_prototype
+      DATABASE_URL: postgres://postgres:easytree@postgres:5432/easytree_prototype
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
+      # setup-node bleibt auch im Container: das Image bringt Node 24 mit,
+      # package.json verlangt ">=22 <23" (.nvmrc).
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium
+      # Kein "playwright install --with-deps": Chromium und Headless Shell
+      # (Revision 1243, wie browsers.json von playwright-core 1.63.0) liegen
+      # samt Bibliotheken schon im Image unter PLAYWRIGHT_BROWSERS_PATH=/ms-playwright.
+      # "--with-deps" ruft apt-get auf und kann damit Pakete und Fonts genau der
+      # Umgebung anheben, die hier kanonisch sein soll.
+      # Nur lesend: haelt Architektur, Node, Font-Aufloesung und
+      # Browser-Revisionen des tatsaechlichen Laufs im Log fest.
+      - name: Render-Umgebung protokollieren
+        run: |
+          uname -m
+          node --version
+          fc-match system-ui
+          fc-match sans-serif
+          ls /ms-playwright
       # .env.local ist Pflicht, nicht Komfort: db:reset und db:seed laufen ueber
       # `node --env-file=.env.local` und brechen ohne die Datei mit Exit 9 ab.
       # Der Playwright-globalSetup ruft genau diese beiden Skripte auf.
@@ -129,8 +154,8 @@ jobs:
       - name: .env.local fuer die Datenbankskripte schreiben
         run: |
           cat > .env.local <<'ENVEOF'
-          DATABASE_URL=postgres://postgres:easytree@127.0.0.1:5432/easytree_prototype
-          DATABASE_URL_TEST=postgres://postgres:easytree@127.0.0.1:5432/easytree_prototype_test
+          DATABASE_URL=postgres://postgres:easytree@postgres:5432/easytree_prototype
+          DATABASE_URL_TEST=postgres://postgres:easytree@postgres:5432/easytree_prototype_test
           GEOCODER_PROVIDER=manual
           GEOCODER_BASE_URL=
           GEOCODER_USER_AGENT=
