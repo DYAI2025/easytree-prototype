@@ -3,9 +3,9 @@
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Jede Code-Task ist TDD-first (failing test → minimal implementation → focused run → broader run → commit). Skills: @test-driven-development, @systematic-debugging, @finishing-a-development-branch.
 
 Plan path: `docs/plans/2026-09-07-easytree-admin-planning-prototype.md` (Repository `DYAI2025/easytree-prototype`)
-Status: `draft-with-assumptions` (ausführbar ab TASK-001; blockierte Teil-Features sind einzeln markiert)
+Status: `ready-for-review` (ausführbar ab TASK-001; blockierte Teil-Features sind einzeln markiert)
 Owner/Executor: coding agent
-Last updated: 2026-09-07 (Europe/Berlin)
+Last updated: 2026-09-12 (Europe/Berlin)
 
 **Goal:** Ein lauffähiger, serverseitig persistierender, baustellenzentrierter Admin-Planungsprototyp (Monatskalender September 2026, Einsatz-Anlage mit materialisierten Baustellentagen, Team/Ressourcen, Tages-/Serienbearbeitung, Geocoding-Adapter, Plan-Kostenübersicht) als eigenständige Codebasis im leeren Repository `easytree-prototype`.
 
