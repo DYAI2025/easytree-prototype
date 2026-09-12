@@ -201,11 +201,9 @@ pnpm test:e2e -g "kalender"
 Zwölf Baselines in `e2e/visual.spec.ts-snapshots/`, Schwelle
 `maxDiffPixelRatio: 0.01`.
 
-```bash
-pnpm test:e2e -g "visual"
-```
-
-**Kanonische Renderumgebung ist der CI-Lauf**, nicht die eigene Maschine:
+**Kanonische visuelle Abnahme ist der E2E-Job des GitHub-Actions-Laufs auf
+x86_64** — nicht die eigene Maschine. Allein sein Ergebnis entscheidet, ob die
+abgenommenen Bilder halten.
 
 - Image `mcr.microsoft.com/playwright:v1.63.0-noble`, als **Job-Container** der
   CI (`runs-on: ubuntu-latest` hostet nur). Die Tag-Version muss
@@ -217,28 +215,67 @@ pnpm test:e2e -g "visual"
   (`PLAYWRIGHT_BROWSERS_PATH=/ms-playwright`, Chromium Revision 1243). Deshalb
   **kein** `playwright install --with-deps` — das ruft `apt-get` und hebt genau
   die Umgebung an, die hier festgeschrieben sein soll.
-- Gleicher Tag heißt nicht gleiches Binary: CI zieht `linux/amd64`, Apple
-  Silicon lokal `linux/arm64`. Die abgenommenen Baselines stammen aus dem
-  amd64-Lauf.
+- Gleicher Tag heißt nicht gleiches Binary: die CI zieht `linux/amd64`, Apple
+  Silicon lokal `linux/arm64`. Die abgenommenen Baselines stammen ausnahmslos
+  aus amd64-Läufen der CI.
 - Baselines heißen `*-linux.png`. Ein lokaler macOS-Lauf erzeugt daneben
   `*-darwin.png` — für die Linux-CI unsichtbar und deshalb in `.gitignore`.
 
-Lokal gegen die abgenommenen Baselines pruefen, im kanonischen Image
-(Vorschau, **kein** Gate — massgeblich bleibt der CI-Lauf):
+Der Schritt „Render-Umgebung protokollieren" hält in jedem Lauf fest, womit
+tatsächlich gerendert wurde. Gemessen im Lauf 34659288701: `x86_64`, Node
+`v22.23.2`, `fc-match system-ui` → WenQuanYi Zen Hei, `chromium-1243`.
+
+### Auf Apple Silicon gibt es keine gleichwertige Abnahme
+
+Diese Entwicklungsmaschine ist arm64. `docker run --platform linux/amd64` zieht
+zwar das amd64-Manifest, führt Chromium dann aber emuliert aus. Dieser Weg ist
+hier **kein belastbarer visueller Prüfstand**: In EYT-172 lief er nicht durch —
+Abbruch bereits beim leeren Startdokument, vor dem ersten Screenshot. Er steht
+deshalb bewusst **nicht** als Befehl in diesem Runbook.
+
+Was statt dessen gilt:
+
+- **Abnahme:** den exakten Branch-Head pushen und den E2E-Job seines
+  GitHub-Actions-Laufs ansehen. Etwas anderes zählt nicht als visuelle Evidenz.
+- **Vorabtest:** ein Lauf in nativer Architektur (arm64-Container desselben
+  Image-Tags) ist Diagnose, nicht Abnahme. So wurde er in EYT-172 benutzt — mit
+  eigenem Docker-Netz, Postgres unter dem Alias `postgres` und `CI=true`; er
+  lieferte dort dieselben Diffzahlen wie der amd64-Lauf. Eine amd64-Baseline
+  darf er trotzdem weder abnehmen noch erzeugen.
+- **Echter AMD64-Host oder -Runner:** dort ist das gepinnte Image keine
+  Emulation und darf direkt benutzt werden.
+
+### Was `pnpm test:e2e -g "visual"` lokal bedeutet
 
 ```bash
-docker run --rm --platform linux/amd64 -v "$PWD:/w" -w /w \
-  mcr.microsoft.com/playwright:v1.63.0-noble \
-  npx playwright test -g "visual"
+pnpm test:e2e -g "visual"
 ```
 
-`--platform linux/amd64` ist noetig, weil Apple Silicon sonst das
-arm64-Manifest zieht; die abgenommenen Baselines stammen aus dem amd64-Lauf.
+Auf macOS prüft dieser Lauf die abgenommenen Bilder **nicht**. Playwright hängt
+die Plattform an den Dateinamen: gesucht wird `…-chromium-darwin.png`,
+versioniert sind aber ausschließlich die zwölf `…-chromium-linux.png`.
+Darwin-Baselines gehören nicht ins Repo und sollen auch nicht angelegt werden;
+unversionierte `*-darwin.png` aus früheren lokalen Läufen können trotzdem in
+der Arbeitskopie liegen.
 
-**`--update-snapshots` steht hier bewusst nicht.** Der Schalter hat die
-Baselines in TASK-049 einmal erzeugt (die Form ist in `playwright.config.ts`
-dokumentiert); wer ihn heute ausfuehrt, ueberschreibt abgenommene Bilder still
-mit dem eigenen Lauf — genau das, was die Regel unten ausschliesst.
+Zwei Folgen, die man kennen muss:
+
+- Ohne Flag gilt der Playwright-Default `--update-snapshots=missing`: der erste
+  Lauf **schreibt** die fehlenden `*-darwin.png` und meldet trotzdem einen
+  Fehlschlag. Die Dateien sind `.gitignore`t, bleiben aber liegen.
+- Ein **zweiter** Lauf vergleicht dann gegen genau diese selbst erzeugten
+  Bilder und wird grün. Dieses Grün vergleicht den eigenen Lauf mit sich selbst
+  und sagt über die Linux/AMD64-Baseline nichts aus.
+
+Für einen ehrlichen roten Lauf ohne Schreiben: `--update-snapshots=none`.
+Fachlich trägt der lokale Lauf trotzdem etwas bei — die DOM-Zusicherungen, die
+in jedem Visual-Fall **vor** dem Screenshot stehen. Für die Bilder bleibt der
+CI-Lauf zuständig.
+
+**`--update-snapshots` und `-u` gehören in keinen dieser Läufe.** Der Schalter
+überschreibt abgenommene Bilder still mit dem eigenen Lauf — genau das, was die
+Regel unten ausschließt. Die historische Erzeugungsform ist in
+`playwright.config.ts` dokumentiert; sie ist Beleg, kein Arbeitsbefehl.
 
 ### Regel für Baselines
 
@@ -261,6 +298,8 @@ pnpm format && pnpm lint && pnpm typecheck && pnpm test && pnpm test:integration
 ```
 
 Sechs Exit-0 entsprechen den CI-Jobs `static`, `unit`, `integration` und `e2e`.
+Eine Ausnahme: Die Visual-Fälle in `pnpm test:e2e` entscheiden lokal nichts
+(§9); ihre Abnahme liegt allein beim CI-Lauf.
 Der fünfte Job `secret-scan` ist lokal nachstellbar:
 
 ```bash
