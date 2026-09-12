@@ -1,0 +1,63 @@
+/*
+ * Semantische Farbrollen (Basisdesign v2.0), uebernommen aus
+ *   DYAI2025/EasyTree @ f8e96e4ceb4f00ae5f5ac777c6eb47aa8f766d6f
+ *   packages/ui/src/basisdesign-v2.css
+ *   blob 59cff53fd374516e1a22b18ae316eb01ac224f35, 2360 Bytes, 63 Zeilen
+ *
+ * Die Werte sind unveraendert. Der Herkunftskommentar des Quellrepos wurde
+ * ersetzt, weil seine Aussagen hier nicht zutreffen: es gibt kein `apps/web`,
+ * und der Waechtertest `packages/ui/test/basisdesign-tokens.test.ts` ist nicht
+ * mitgereist. Die 4.5:1-Zusage des Originalkopfes ist hier daher UNBEWACHT,
+ * bis ein eigener Test sie nachrechnet.
+ *
+ * Laut Quelle sind zwei Rollen NICHT durch Confluence 8814623 §2.1 gedeckt:
+ * `--eyt-state-published-text` (Ableitung aus --eyt-action-primary) und
+ * `--eyt-action-primary-contrast` (repo-eigene Wahl).
+ *
+ * Reproduktion (read-only):
+ *   git -C <EasyTree-Klon> show f8e96e4:packages/ui/src/basisdesign-v2.css
+ */
+
+:root {
+  --eyt-bg-canvas: #f6f4ef;
+  --eyt-bg-surface: #ffffff;
+  --eyt-text-primary: #1d1b18;
+  --eyt-text-secondary: #5b564e;
+  --eyt-border-default: #d8d4cb;
+  --eyt-action-primary: #1e5231;
+  --eyt-action-primary-contrast: #ffffff;
+  --eyt-state-published-bg: #e1ebe2;
+  --eyt-state-published-text: #1e5231;
+  --eyt-state-draft-text: #7a5300;
+  --eyt-state-draft-bg: #f4e8ce;
+  --eyt-state-danger-text: #9b2c1f;
+  --eyt-state-danger-bg: #f7e3df;
+  --eyt-state-info-text: #155e75;
+  --eyt-state-info-bg: #deedf2;
+}
+
+/*
+ * Dunkelmodus folgt dem SYSTEM (Basisdesign §7: „Dark Mode folgt System oder
+ * expliziter Nutzereinstellung, nicht einer ungeprueften automatischen
+ * Annahme“). Jede Rolle wird vollstaendig neu gesetzt — kein Teilsatz, damit
+ * keine Rolle unbemerkt im Hellwert stehen bleibt.
+ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --eyt-bg-canvas: #161513;
+    --eyt-bg-surface: #211f1c;
+    --eyt-text-primary: #f1efe9;
+    --eyt-text-secondary: #b0aaa0;
+    --eyt-border-default: #3a3733;
+    --eyt-action-primary: #8fc7a2;
+    --eyt-action-primary-contrast: #161513;
+    --eyt-state-published-bg: #22352a;
+    --eyt-state-published-text: #8fc7a2;
+    --eyt-state-draft-text: #e3b95b;
+    --eyt-state-draft-bg: #3a2f17;
+    --eyt-state-danger-text: #f0a08f;
+    --eyt-state-danger-bg: #41211c;
+    --eyt-state-info-text: #7cc1db;
+    --eyt-state-info-bg: #1c3540;
+  }
+}

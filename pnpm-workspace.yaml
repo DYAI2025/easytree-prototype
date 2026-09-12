@@ -1,0 +1,6 @@
+# Build-Skripte, die pnpm sonst uebergeht:
+# - unrs-resolver: nativer Resolver von eslint-import-resolver-typescript
+# - esbuild: native Binary fuer drizzle-kit und tsx
+onlyBuiltDependencies:
+  - unrs-resolver
+  - esbuild

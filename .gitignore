@@ -1,0 +1,26 @@
+node_modules/
+.next/
+out/
+build/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+.env
+.env.local
+.env*.local
+
+test-results/
+playwright-report/
+blob-report/
+
+.claude/
+.DS_Store
+
+# Lokales Ablagefach fuer Claude-Artefakte, kein Projektinhalt.
+Claude outputs/
+
+# Playwright-Baselines entstehen AUSSCHLIESSLICH im Linux-Container
+# (siehe playwright.config.ts). Die macOS-Rasterung erzeugt daneben eigene
+# *-darwin.png, die fuer die Linux-CI unsichtbar sind und nur den Baum fuellen.
+e2e/**/*-darwin.png
