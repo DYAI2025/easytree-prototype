@@ -188,7 +188,52 @@ ls e2e/visual.spec.ts-snapshots/ | wc -l  24   (12 linux verfolgt + 12 darwin ig
 
 ### Läufe für den TASK-051-Evidenz-Commit
 
-PENDING_AFTER_FIRST_TASK051_PUSH
+`TASK051_EVIDENCE_SHA = f191245289750fb04ba6de073c6eae059a59d690`
+
+**Diese beiden Läufe validieren `TASK051_EVIDENCE_SHA`** — den Commit, der
+diese Evidenzdatei und die Statuszeile des Plans einführt.
+
+| Rolle | Run-ID | Event | Conclusion | URL |
+| --- | --- | --- | --- | --- |
+| Push-CI | `34666797071` | `push` | **success** | <https://github.com/DYAI2025/easytree-prototype/actions/runs/34666797071> |
+| PR-CI (PR #2, Merge-Kandidat) | `34666799390` | `pull_request` | **success** | <https://github.com/DYAI2025/easytree-prototype/actions/runs/34666799390> |
+
+Alle fünf Jobs, in **beiden** Läufen:
+
+| Job | Push `34666797071` | PR `34666799390` |
+| --- | --- | --- |
+| `static (format, lint, typecheck)` | success | success |
+| `unit (vitest domain + ui)` | success | success |
+| `integration (vitest + postgres 17)` | success | success |
+| `secret-scan` | success | success |
+| `e2e (playwright chromium)` | success | success |
+
+E2E-Ist-Zahlen, wörtlich aus den Joblogs:
+
+```
+push 34666797071 / job 103480209115:  Running 148 tests using 1 worker
+                                        148 passed (1.4m)
+pr   34666799390 / job 103480216814:  Running 148 tests using 1 worker
+                                        148 passed (1.2m)
+```
+
+`FINAL_E2E_PASSED = 148`, `FINAL_E2E_FAILED = 0`. In beiden Joblogs ist die
+Trefferzahl für `✘`, `✗`, `Error:` und `##[error]` **0**.
+
+**Visuelle Fälle 12 / 12 — als Ableitung gekennzeichnet, nicht als
+Einzelablesung.** Der in CI konfigurierte `github`-Reporter schreibt keine
+Zeile je bestandenem Test (Trefferzahl für `visual` im Joblog: 0); er meldet
+Annotationen nur für Fehlschläge und am Ende die Summenzeile. Die Aussage
+„12/12" folgt deshalb aus drei gemessenen Werten: 148 Tests gelaufen, 0
+Fehlschläge, und `e2e/visual.spec.ts` enthält genau zwölf `test(`-Fälle. Ein
+gescheiterter Screenshot-Vergleich hätte die Summenzeile und den Job rot
+gemacht. Die Einzelablesung je Fall liegt lokal vor (Abschnitt 3), stammt dort
+aber von der Darwin-Rasterung und ist keine Aussage über die Linux-Baselines.
+
+Der folgende Commit, der diese CI-URLs einträgt, ändert **ausschließlich
+Dokumentation** und erhält deshalb weiter unten seinen eigenen
+Exact-Head-CI-Lauf. Es wird ausdrücklich **nicht** behauptet, dass die beiden
+Läufe oben einen späteren SHA validieren.
 
 ### Kanonische Renderumgebung (unverändert)
 
@@ -204,10 +249,26 @@ E2E-Job des GitHub-Actions-Laufs auf x86_64:
 | Schwelle | `maxDiffPixelRatio: 0.01` |
 | Zeitanker | `EASYTREE_FIXED_TODAY=2026-09-01` |
 
-Gemessen im Lauf `34659288701` durch den Schritt „Render-Umgebung
-protokollieren": `x86_64`, Node `v22.23.2`, `fc-match system-ui` →
-WenQuanYi Zen Hei, `chromium-1243`. Evidenzklasse:
-`ACCEPTED_PRIOR_EVIDENCE`.
+Der Schritt „Render-Umgebung protokollieren" hält in jedem Lauf fest, womit
+tatsächlich gerendert wurde. Werte aus den **TASK-051-Läufen selbst**
+(`MEASURED_IN_TASK_051`), identisch in Push `34666797071` (Job `103480209115`)
+und PR `34666799390` (Job `103480216814`):
+
+```
+x86_64
+v22.23.2
+wqy-zenhei.ttc: "WenQuanYi Zen Hei" "Regular"     (fc-match system-ui)
+wqy-zenhei.ttc: "WenQuanYi Zen Hei" "Regular"     (fc-match sans-serif)
+chromium-1243
+chromium_headless_shell-1243
+```
+
+Der PostgreSQL-Service desselben Laufs meldet
+`PostgreSQL 17.11 … on x86_64-pc-linux-gnu`.
+
+Dieselben Werte wurden zuvor im Lauf `34659288701` gemessen
+(`ACCEPTED_PRIOR_EVIDENCE`); die Renderumgebung ist damit über mehrere Läufe
+hinweg unverändert.
 
 `--update-snapshots` läuft in **keinem** Workflow; CI regeneriert Baselines nie
 automatisch.
@@ -424,7 +485,7 @@ wiederhergestellt (in Abschnitt 2 ausgeführt, Exit 0).
 | Feld | Wert |
 | --- | --- |
 | `TASK051_LOCAL_GATE` | **PASS** — `pnpm db:reset && pnpm db:seed` Exit 0; alle sechs Validierungsbefehle Exit 0; keine Darwin-Visual-Mutation; Arbeitsbaum sauber |
-| `CI` | PENDING_AFTER_FIRST_TASK051_PUSH |
+| `CI` | **PASS** auf `TASK051_EVIDENCE_SHA` (`f191245`): Push `34666797071` und PR `34666799390`, je fünf Jobs `success`, E2E 148 passed / 0 failed (Abschnitt 4). Der Exact-Head-Lauf des nachfolgenden Evidenz-URL-Commits ist davon getrennt |
 | `MERGE` | **NOT_AUTHORIZED** — PR #2 bleibt offen; kein Merge nach `master` |
 | `PRODUCTION_READY_CLAIMED` | **NO** |
 
