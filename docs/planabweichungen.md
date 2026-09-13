@@ -174,3 +174,125 @@ Tagesdrawer und oeffnet den Kosten-Drawer.
 
 Produktinvariante 7 bleibt gewahrt: die Kostenansicht ist kein
 Navigationspunkt, sie ist nur aus dem Tageskontext erreichbar.
+
+## PA-11: H-07 war als Scope-Entscheidung notiert, nicht als offene Produktfrage
+
+`docs/decisions/HUMAN_INPUT_REQUIRED.md` fuehrte H-07 (Einsatz-Verlaengerung)
+als offene Entscheidung mit der Begruendung: **„Nicht gebaut. Der Master-Prompt
+fordert es nicht."** Plan §2 H-07 sagt dasselbe: „im Master-Prompt nicht
+gefordert → nicht geplant".
+
+Das ist eine Aussage ueber den SCOPE DIESES PROTOTYPEN, keine ueber das
+Produkt. Die Produktfrage war zu diesem Zeitpunkt bereits beantwortet, und zwar
+kanonisch:
+
+| Quelle | Aussage |
+| --- | --- |
+| Confluence `49119274` D-007 | „Ein Einsatz mit bekanntem Ende kann verlaengert werden; ein offener Einsatz kann durch einen spaeteren Planungshorizont um zusaetzliche Tage ergaenzt werden." Status `CANONICAL_PRODUCT_DECISION / HUMAN_PO_CONFIRMED`. |
+| Ebenda, Invariante 12 | „Spaetere Verlaengerung fuegt nur neue Tage demselben Einsatz hinzu und veraendert bestehende Tage nicht." |
+| Ebenda, Gate | `LATER_EXTENSION = SAME_ENGAGEMENT_ADDITIONAL_DAYS_ONLY`, `PREFILL = MATERIALIZED / NO_LIVE_INHERITANCE` |
+| Ebenda, Drift-Gate-Frage 11 | „Fuegt eine Verlaengerung nur neue Tage demselben Einsatz hinzu und bewahrt vorhandene Tage?" |
+| Jira EYT-120 | Verlaengerung ausdruecklich IM Scope; nur die Tages-/Serienaenderung ist an EYT-121/122 abgegeben. |
+
+Deshalb ist die Umsetzung **kein** `PRODUCT_MODEL_DRIFT` und auch keine still
+getroffene Produktentscheidung: sie schliesst die Luecke zwischen dem
+Prototyp-Scope und einer laengst getroffenen Entscheidung. Der Eintrag in
+`HUMAN_INPUT_REQUIRED.md` ist entsprechend auf `RESOLVED_BY_EXISTING_CANONICAL_DECISION`
+gesetzt, die Zaehlung dort und in `README.md` von sieben auf sechs offene Punkte
+korrigiert.
+
+**Was NICHT mitentschieden wurde:** Verkuerzen, Startverschiebung und
+Baustellenwechsel bleiben zu. Sie sind nicht nur ungeprueft, sondern stehen gar
+nicht erst im Vertrag `UpdateEngagementCommand` - eine Regel, die man nicht
+vergessen kann, weil das Feld fehlt.
+
+## PA-12: Die optimistische Sperre nutzt einen Token, nicht die Spalte `updated_at`
+
+Der Auftrag nennt „bevorzugt die bereits persistierte `updatedAt`-Information,
+sofern sie nach Source Inspection dafuer belastbar geeignet ist". Die
+Inspektion ergab: **die rohe Spalte ist es nicht.**
+
+- `engagements.updated_at` ist `timestamptz` und speichert **Mikrosekunden**.
+- Der Treiber liefert sie als JavaScript-`Date`, und das kennt nur
+  **Millisekunden**.
+- Zwei Schreibvorgaenge weniger als eine Millisekunde auseinander haetten damit
+  denselben Wert getragen, und der veraltete Stand eines zweiten Clients waere
+  still angenommen worden - genau der Fall, den REQ-E04 ausschliesst.
+- Ausserdem traegt die Tabelle **keinen Trigger**: `updated_at` hat
+  `default now()` und wird von nichts fortgeschrieben (geprueft in
+  `drizzle/0000_initial.sql`, kein `TRIGGER` im gesamten Migrationsstand).
+
+Der Token wird deshalb **in der Datenbank** gerendert, mikrosekundengenau und
+fest in UTC (`to_char(... at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`),
+damit weder die Sitzungszeitzone noch die Millisekundenkappung des Treibers den
+Vergleich verschiebt. Feste Breite heisst: lexikografischer Vergleich ist
+zugleich chronologischer. Die Funktion steht EINMAL in
+`src/server/queries/engagement-detail.ts` und wird vom Command mitbenutzt -
+zwei Kopien derselben Formatzeichenkette waeren die eigentliche Gefahr, weil
+Leser und Pruefer dann auseinanderlaufen koennten, ohne dass ein Test es merkt.
+
+Beim Schreiben wird `updated_at` auf
+`greatest(clock_timestamp(), updated_at + interval '1 microsecond')` gesetzt -
+streng steigend statt nur „jetzt". `clock_timestamp()` statt `now()`, weil
+`now()` die Transaktionszeit liefert und zwei gleichzeitig gestartete
+Transaktionen dieselbe haetten.
+
+**Kein Schema-Wechsel:** eine `version`-Spalte haette eine Migration
+gebraucht; die vorhandene Spalte reicht, sobald sie richtig gelesen wird.
+
+Nebenwirkung, bewusst: `GET /api/einsaetze/[id]` geht jetzt durch
+`EngagementDetailSchema` (wie die Baustellentag-Route schon immer). Eine Zeile,
+die dem Vertrag nicht entspricht, faellt damit auf, statt stumm
+durchgereicht zu werden.
+
+## PA-13: Die Routentests zu `PATCH` waren beim ersten Lauf gruen
+
+`CLAUDE.md` verlangt einen roten Lauf vor der Implementierung und nennt einen
+beim ersten Lauf gruenen Test ausdruecklich einen ungueltigen Schritt.
+
+Fuer die acht HTTP-Faelle in `tests/integration/api-engagements.test.ts`
+(`PATCH`-Block) trifft das zu: sie sind entstanden, NACHDEM Command und Route
+bereits gruen waren, und waren sofort gruen. Sie belegen fuer sich genommen
+also nichts.
+
+Offengelegt statt kaschiert - und ausgeglichen durch die Gegenmutationen in
+Abschnitt „Gegenmutationen" des Abschlussberichts: dort wird gemessen, welche
+dieser Zusicherungen bei einer gezielten Verletzung tatsaechlich rot werden.
+Der rote Ausgangslauf der eigentlichen Fachlogik liegt vor und ist dokumentiert
+(`Cannot find module '../../src/server/commands/update-engagement'`, danach
+`Property 'updatedAt' does not exist on type 'EngagementDetail'`).
+
+## PA-14: Eine Gegenmutation blieb gruen - der Schutz war Dekoration
+
+Vier Gegenmutationen an `update-engagement.ts`, jede einzeln angewendet, gegen
+echtes PostgreSQL gemessen (13.09.2026), jede anschliessend per `diff`
+bitweise zurueckgenommen:
+
+| Mutation | Rote Tests |
+| --- | --- |
+| Deltastart `addDays(bisherigesEnde, 1)` → `einsatz.startDate` (bestehende Tage neu erzeugen) | **9** |
+| Nach dem Einfuegen zusaetzlich `update worksite_day_configurations set superseded_at = now()` (bestehende Revisionen still abloesen) | **5** |
+| Versionspruefung `if (einsatz.version !== command.expectedUpdatedAt)` → `if (false)` (veralteten Stand annehmen) | **3** |
+| `greatest(clock_timestamp(), updated_at + interval '1 microsecond')` → `now()` | **0** |
+
+Die vierte ist der Befund. Alle 196 Integrationstests blieben gruen, obwohl der
+Schutz entfernt war. Damit war die strenge Monotonie des Versionstokens
+**unbelegt** - und ein Gate, das nie rot war, ist `not_run` und nicht `passed`.
+
+Der naheliegende Grund, warum kein Test griff: zwei aufeinanderfolgende
+Aenderungen laufen in getrennten Transaktionen und bekommen schon von `now()`
+verschiedene Zeitstempel. Der Fall, in dem `greatest` wirklich traegt, ist ein
+anderer - `updated_at` liegt in der ZUKUNFT (Uhrversatz, oder eine Transaktion,
+die spaeter begonnen hat als die letzte Schreibung). Dann setzt `now()` den
+Token rueckwaerts, und ein bereits verbrauchter Token wird wieder gueltig.
+
+Reparatur ist NICHT das Entfernen des Schutzes, sondern ein Test, der ihn
+belegt: „laesst den Token nicht zurueckspringen, wenn updated_at in der Zukunft
+liegt" setzt `updated_at` per SQL eine Stunde nach vorn und prueft danach
+beides - der neue Token ist groesser, und der alte wird mit
+`ENGAGEMENT_VERSION_CONFLICT` abgewiesen.
+
+Gemessen nach dem Nachziehen: Echtcode **197 passed**; mit derselben
+Gegenmutation **1 failed | 196 passed**, und der eine rote Test ist genau
+dieser. Die Gegenmutation ist damit nachweislich erkannt; Ruecknahme per `diff`
+verifiziert.

@@ -98,6 +98,27 @@ describe("resolvePlanungsViewState", () => {
     expect(zustand).toMatchObject({ drawer: "kosten", tag: "2026-09-10" });
   });
 
+  it("oeffnet die Einsatzbearbeitung mit dem Titel aus dem Lesemodell", () => {
+    expect(
+      resolvePlanungsViewState(view, { drawer: "einsatz", id: EINSATZ_ID }),
+    ).toEqual<PlanungsViewState>({
+      drawer: "einsatz",
+      engagementId: EINSATZ_ID,
+      engagementTitle: "Baumpflege",
+      tag: null,
+    });
+  });
+
+  it("haelt den Tageskontext an der Einsatzbearbeitung fest, wenn er im Raster liegt", () => {
+    expect(
+      resolvePlanungsViewState(view, {
+        drawer: "einsatz",
+        id: EINSATZ_ID,
+        tag: "2026-09-10",
+      }),
+    ).toMatchObject({ drawer: "einsatz", tag: "2026-09-10" });
+  });
+
   it("oeffnet die Einsatzanlage auch ohne id", () => {
     expect(
       resolvePlanungsViewState(view, { drawer: "neu", tag: "2026-09-10" }),
@@ -110,6 +131,8 @@ describe("resolvePlanungsViewState", () => {
     ["tag mit unbekannter id", { drawer: "tag", id: UNBEKANNT }],
     ["kosten ohne id", { drawer: "kosten" }],
     ["kosten mit unbekannter id", { drawer: "kosten", id: UNBEKANNT }],
+    ["einsatz ohne id", { drawer: "einsatz" }],
+    ["einsatz mit unbekannter id", { drawer: "einsatz", id: UNBEKANNT }],
     ["mehrfach gesetzter Drawer", { drawer: ["tag", "kosten"], id: TAG_ID }],
   ])("faellt bei %s auf den Kalender zurueck", (_name, params) => {
     expect(resolvePlanungsViewState(view, params)).toEqual(KEIN_DRAWER);

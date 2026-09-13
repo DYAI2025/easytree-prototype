@@ -116,8 +116,11 @@ und deshalb ignoriert.
 - [`docs/runbooks/entwicklung.md`](docs/runbooks/entwicklung.md) — vollständiges
   Entwicklungs-Runbook: Datenbank, Tests, Renderumgebung, Rollback-Grenzen.
 - [`docs/decisions/HUMAN_INPUT_REQUIRED.md`](docs/decisions/HUMAN_INPUT_REQUIRED.md)
-  — die sieben offenen Entscheidungen (H-01…H-07), die nicht still getroffen
-  werden dürfen.
+  — die **sechs** weiterhin offenen Entscheidungen (H-01…H-06), die nicht still
+  getroffen werden dürfen. H-07 (Einsatz-Verlängerung) ist am 13.09.2026
+  aufgelöst — nicht durch eine stille Implementierungsentscheidung, sondern
+  gegen die bereits bestehende kanonische Entscheidung D-007; die Begründung
+  steht in derselben Datei.
 - [`docs/plans/2026-09-07-easytree-admin-planning-prototype.md`](docs/plans/2026-09-07-easytree-admin-planning-prototype.md)
   — der kanonische Plan: Anforderungen, Datenmodell, UX-Spezifikation, Aufgaben
   TASK-001…TASK-051, Prüfmatrix.

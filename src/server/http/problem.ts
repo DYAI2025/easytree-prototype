@@ -33,6 +33,9 @@ const TITLES: Partial<Record<ProblemCode, string>> = {
   IDEMPOTENCY_KEY_REUSED: "Der Idempotency-Key steht bereits fuer eine andere Anfrage.",
   MISSING_IDEMPOTENCY_KEY: "Der Header Idempotency-Key fehlt.",
   DAY_IN_PAST_LOCKED: "Dieser Tag liegt vor dem heutigen Datum.",
+  ENGAGEMENT_VERSION_CONFLICT: "Der Einsatz wurde zwischenzeitlich geaendert.",
+  ENGAGEMENT_SHRINK_NOT_ALLOWED: "Ein Einsatz kann nicht verkuerzt werden.",
+  ENGAGEMENT_PERIOD_MODE_MISMATCH: "Enddatum und Planungshorizont schliessen einander aus.",
   GEOCODER_UNAVAILABLE: "Der Geocoding-Dienst ist nicht erreichbar.",
   GEOCODER_NOT_CONFIGURED: "Es ist kein Geocoding-Provider konfiguriert.",
 };

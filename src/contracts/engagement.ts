@@ -45,3 +45,76 @@ export const EngagementCreatedSchema = z.object({
 });
 
 export type EngagementCreated = z.infer<typeof EngagementCreatedSchema>;
+
+/**
+ * Bearbeitung eines BESTEHENDEN Einsatzes (Confluence 49119274 D-007).
+ *
+ * Was hier fehlt, ist die eigentliche Aussage des Vertrags: es gibt kein
+ * `startDate` und kein `worksiteId`. Beides waere eine Aenderung an bereits
+ * materialisierten Baustellentagen, und die ist ausgeschlossen (Invariante 12).
+ * Die Regel steht damit nicht als Pruefung im Command, sondern als fehlende
+ * Moeglichkeit im Vertrag - sie kann nicht vergessen werden.
+ *
+ * `endDate` und `planningHorizonDate` sind BEIDE optional, weil der Modus am
+ * gespeicherten Einsatz haengt und nicht an der Eingabe: ein Einsatz mit
+ * fachlichem Ende wird ueber `endDate` verlaengert, ein offener ueber einen
+ * spaeteren `planningHorizonDate`. Den falschen Weg weist die Domaene mit
+ * ENGAGEMENT_PERIOD_MODE_MISMATCH ab - im Schema waere die Kreuzregel nur ein
+ * unspezifisches VALIDATION_FAILED (dieselbe Ueberlegung wie oben bei der
+ * Anlage).
+ *
+ * Ein weggelassenes Feld bleibt unveraendert - wie bei `UpdateCustomerCommand`
+ * und anders als beim vollstaendig ersetzenden `UpsertEmployeeCommand`.
+ */
+export const UpdateEngagementCommand = z.object({
+  id: z.uuid(),
+  /**
+   * Der Stand, den der Aufrufer gesehen hat - die optimistische Sperre
+   * (REQ-E04). Undurchsichtiger Token aus dem Readback, kein Datum zum
+   * Selberbauen: er kommt mikrosekundengenau aus `engagements.updated_at`.
+   */
+  expectedUpdatedAt: z.string().trim().min(1),
+  title: nonBlankText(200).optional(),
+  description: optionalText(),
+  colourKey: z.enum(COLOUR_KEYS).optional(),
+  endDate: LocalDateSchema.optional(),
+  planningHorizonDate: LocalDateSchema.optional(),
+  /** Optionale Tagesauswahl - gilt AUSSCHLIESSLICH fuer die neuen Tage. */
+  addedDays: z.array(LocalDateSchema).default([]),
+  removedDays: z.array(LocalDateSchema).default([]),
+});
+
+export const EngagementUpdatedSchema = z.object({
+  engagementId: z.uuid(),
+  /** Der neue Versionstoken; der naechste Speichervorgang braucht ihn. */
+  updatedAt: z.string(),
+  /** Nur die ERGAENZTEN Tage - bestehende stehen hier nie drin. */
+  addedWorksiteDayIds: z.array(z.uuid()),
+  addedLocalDates: z.array(LocalDateSchema),
+});
+
+export type EngagementUpdated = z.infer<typeof EngagementUpdatedSchema>;
+
+export const EngagementDetailSchema = z.object({
+  id: z.uuid(),
+  title: z.string(),
+  description: z.string().nullable(),
+  startDate: LocalDateSchema,
+  endDate: LocalDateSchema.nullable(),
+  planningHorizonDate: LocalDateSchema.nullable(),
+  colourKey: z.string(),
+  updatedAt: z.string(),
+  worksiteId: z.uuid(),
+  worksiteName: z.string(),
+  customerName: z.string(),
+  days: z.array(
+    z.object({
+      worksiteDayId: z.uuid(),
+      localDate: LocalDateSchema,
+      revisionNo: z.number().int().min(1),
+      origin: z.enum(["materialized", "day_edit", "series_edit"]),
+    }),
+  ),
+});
+
+export type EngagementDetailDto = z.infer<typeof EngagementDetailSchema>;

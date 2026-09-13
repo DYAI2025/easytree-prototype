@@ -25,9 +25,11 @@ import { Toast, useErfolg } from "../feedback/toast";
 import {
   baustellentagGespeichert,
   einsatzAngelegt,
+  einsatzGespeichert,
   serieUebernommen,
 } from "../feedback/erfolgstexte";
 import { EngagementDrawer } from "../engagement/engagement-drawer";
+import { EngagementEditDrawer } from "../engagement/engagement-edit-drawer";
 import { DayDrawer, type DayChangeEntwurf } from "../day/day-drawer";
 import { SeriesPreviewDialog, type SeriesNamen } from "../day/series-preview-dialog";
 import { CostDrawer } from "../cost/cost-drawer";
@@ -291,6 +293,17 @@ export function PlanungsAnsicht({
               id: engagementId,
             })
           }
+          onEditEngagement={(engagementId) =>
+            // Derselbe Weg wie zu den Kosten: der Tageskontext bleibt stehen,
+            // der Drawer wechselt. Die Einsatzbearbeitung ist damit ein
+            // teilbarer Zustand wie jeder andere (B-05).
+            gehe({
+              monat: view.month,
+              tag: viewState.tag,
+              drawer: "einsatz",
+              id: engagementId,
+            })
+          }
           onSeriesPreview={(entwurf, detail, namen) => setSerie({ entwurf, detail, namen })}
           /*
            * Fokusrueckgabe, wenn der Ausloeser das Schliessen nicht ueberlebt
@@ -318,6 +331,21 @@ export function PlanungsAnsicht({
           engagementId={viewState.engagementId}
           engagementTitle={viewState.engagementTitle}
           onClose={schliesse}
+        />
+      )}
+
+      {viewState.drawer === "einsatz" && (
+        <EngagementEditDrawer
+          key={viewState.engagementId}
+          engagementId={viewState.engagementId}
+          today={view.today}
+          onClose={schliesse}
+          onSaved={(titel, neueTage) => {
+            // Servertruth neu holen: eine Verlaengerung legt Karten an, eine
+            // Farb- oder Titelaenderung faerbt und beschriftet bestehende neu.
+            nachAenderung();
+            melde(einsatzGespeichert(titel, neueTage));
+          }}
         />
       )}
 

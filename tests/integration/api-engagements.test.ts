@@ -1,6 +1,9 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
-import { GET as engagementDetailRoute } from "../../src/app/api/einsaetze/[id]/route";
+import {
+  GET as engagementDetailRoute,
+  PATCH as engagementPatchRoute,
+} from "../../src/app/api/einsaetze/[id]/route";
 import { POST as createEngagementRoute } from "../../src/app/api/einsaetze/route";
 import { POST as createCustomerRoute } from "../../src/app/api/auftraggeber/route";
 import { POST as createWorksiteRoute } from "../../src/app/api/baustellen/route";
@@ -213,5 +216,159 @@ describe("api-engagements", () => {
     expect(response.status).toBe(200);
     expect(body.title).toBe("Baumpflege Herbstschnitt");
     expect(body.days).toHaveLength(10);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * PATCH /api/einsaetze/[id] - Einsatzbearbeitung ueber HTTP
+ * ------------------------------------------------------------------ */
+
+const patch = (url: string, body: unknown) =>
+  new Request(url, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+    headers: { "content-type": "application/json" },
+  });
+
+/** Legt den Einsatz an und liefert Id und aktuellen Versionstoken. */
+async function angelegtMitToken(): Promise<{ id: string; token: string }> {
+  const angelegt = await (
+    await createEngagementRoute(
+      post("http://localhost/api/einsaetze", einsatz(), { "Idempotency-Key": "key-patch" }),
+    )
+  ).json();
+
+  const detail = await (
+    await engagementDetailRoute(
+      new Request(`http://localhost/api/einsaetze/${angelegt.engagementId}`),
+      { params: Promise.resolve({ id: angelegt.engagementId }) },
+    )
+  ).json();
+
+  return { id: angelegt.engagementId, token: detail.updatedAt };
+}
+
+const sendePatch = (id: string, body: unknown) =>
+  engagementPatchRoute(patch(`http://localhost/api/einsaetze/${id}`, body), {
+    params: Promise.resolve({ id }),
+  });
+
+describe("api-engagements: PATCH", () => {
+  it("liefert im Detail einen mikrosekundengenauen Versionstoken", async () => {
+    const { token } = await angelegtMitToken();
+
+    // Die Millisekundenform waere fuer die Vorbedingung zu grob (REQ-E04).
+    expect(token).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/);
+  });
+
+  it("aendert Titel und Farbe und liefert den neuen Token", async () => {
+    const { id, token } = await angelegtMitToken();
+
+    const response = await sendePatch(id, {
+      expectedUpdatedAt: token,
+      title: "Herbstschnitt verschoben",
+      colourKey: "ocker",
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.engagementId).toBe(id);
+    expect(body.addedWorksiteDayIds).toEqual([]);
+    expect(body.updatedAt).not.toBe(token);
+
+    const detail = await (
+      await engagementDetailRoute(new Request(`http://localhost/api/einsaetze/${id}`), {
+        params: Promise.resolve({ id }),
+      })
+    ).json();
+
+    expect(detail.title).toBe("Herbstschnitt verschoben");
+    expect(detail.colourKey).toBe("ocker");
+    expect(detail.updatedAt).toBe(body.updatedAt);
+  });
+
+  it("verlaengert nach vorn und ergaenzt nur die neuen Werktage", async () => {
+    const { id, token } = await angelegtMitToken();
+
+    const response = await sendePatch(id, {
+      expectedUpdatedAt: token,
+      endDate: "2026-09-25",
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    // 19./20.09. sind Wochenende, 21.-25.09. sind die fuenf neuen Werktage.
+    expect(body.addedLocalDates).toEqual([
+      "2026-09-21",
+      "2026-09-22",
+      "2026-09-23",
+      "2026-09-24",
+      "2026-09-25",
+    ]);
+    expect(await zaehle("worksite_days")).toBe("15");
+    expect(await zaehle("engagements")).toBe("1");
+  });
+
+  it("meldet 409 bei veraltetem Stand und schreibt nichts", async () => {
+    const { id, token } = await angelegtMitToken();
+
+    await sendePatch(id, { expectedUpdatedAt: token, title: "Erster" });
+
+    const response = await sendePatch(id, { expectedUpdatedAt: token, title: "Zweiter" });
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.type).toBe("urn:easytree-prototype:problem:ENGAGEMENT_VERSION_CONFLICT");
+
+    const detail = await (
+      await engagementDetailRoute(new Request(`http://localhost/api/einsaetze/${id}`), {
+        params: Promise.resolve({ id }),
+      })
+    ).json();
+
+    expect(detail.title).toBe("Erster");
+  });
+
+  it("meldet 422 bei einer Verkuerzung und laesst alle Tage stehen", async () => {
+    const { id, token } = await angelegtMitToken();
+
+    const response = await sendePatch(id, { expectedUpdatedAt: token, endDate: "2026-09-11" });
+    const body = await response.json();
+
+    expect(response.status).toBe(422);
+    expect(body.type).toBe("urn:easytree-prototype:problem:ENGAGEMENT_SHRINK_NOT_ALLOWED");
+    expect(await zaehle("worksite_days")).toBe("10");
+  });
+
+  it("meldet 422, wenn ein Planungshorizont am Einsatz MIT Ende gesetzt wird", async () => {
+    const { id, token } = await angelegtMitToken();
+
+    const response = await sendePatch(id, {
+      expectedUpdatedAt: token,
+      planningHorizonDate: "2026-09-25",
+    });
+
+    expect(response.status).toBe(422);
+    expect((await response.json()).type).toBe(
+      "urn:easytree-prototype:problem:ENGAGEMENT_PERIOD_MODE_MISMATCH",
+    );
+  });
+
+  it("meldet 400, wenn die Vorbedingung ganz fehlt", async () => {
+    const { id } = await angelegtMitToken();
+
+    const response = await sendePatch(id, { title: "Ohne Vorbedingung" });
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).type).toBe("urn:easytree-prototype:problem:VALIDATION_FAILED");
+  });
+
+  it("meldet 404 fuer einen unbekannten Einsatz", async () => {
+    const response = await sendePatch("b0000000-0000-4000-8000-00000000dead", {
+      expectedUpdatedAt: "2026-09-07T00:00:00.000000Z",
+      title: "Ins Leere",
+    });
+
+    expect(response.status).toBe(404);
   });
 });

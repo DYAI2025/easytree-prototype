@@ -180,6 +180,19 @@ pnpm test:e2e                               # Playwright/Chromium, baut vorher
 pnpm test:e2e -g "kalender"
 ```
 
+- **Einmalig je Rechner: `pnpm exec playwright install chromium`.** Die Browser
+  liegen im Benutzer-Cache (`~/Library/Caches/ms-playwright`), nicht in
+  `node_modules` — nach einem frischen Checkout oder einem Playwright-Update
+  fehlen sie. Gemessen am 13.09.2026 ohne diesen Schritt: **155 failed**, jeder
+  Test in 1–3 ms, jedes Mal
+  `browserType.launch: Executable doesn't exist … chromium_headless_shell-1243`.
+  Build und Server liefen dabei sauber hoch — es hat schlicht **kein einziger
+  Test das Produkt berührt**. Ein roter Lauf dieser Art sagt nichts über den
+  Code; wer ihn als Befund liest, verfolgt ein Phantom.
+  Das ist **kein** Widerspruch zu Abschnitt 9: dort steht `--with-deps` in
+  Frage, und zwar für den CI-Container, der Browser und Systembibliotheken
+  bereits mitbringt. Lokal wird ohne `--with-deps` installiert, es werden also
+  keine Systempakete angefasst.
 - `globalSetup` (`e2e/fixtures/seed-helper.ts`) fährt **einmal pro Lauf**
   `pnpm db:reset` und `pnpm db:seed`.
 - `webServer` startet `pnpm build && pnpm start` (Timeout 300 s) und probt
@@ -187,7 +200,11 @@ pnpm test:e2e -g "kalender"
   bräuchte, das erst `globalSetup` anlegt.
 - `reuseExistingServer` ist **immer** `false`. Läuft schon etwas auf dem Port,
   scheitert der Lauf laut, statt still gegen einen fremden Server zu prüfen.
-  Lokal deshalb mit freiem Port: `PORT=3100 pnpm test:e2e`.
+  Lokal deshalb mit freiem Port: `PORT=3100 pnpm test:e2e` — und den Port
+  vorher wirklich prüfen (`nc -z 127.0.0.1 3100`). Am 13.09.2026 hielt ein
+  fremder Node-Prozess genau die 3100, und der Lauf brach korrekt ab mit
+  `http://127.0.0.1:3100/api/health is already used`, ohne einen einzigen Test
+  auszuführen.
 - Gegen eine bereits laufende Instanz testen: `PLAYWRIGHT_BASE_URL=… pnpm test:e2e`
   (dann startet Playwright keinen eigenen Server).
 - `workers: 1`, `fullyParallel: false` — alle Specs teilen eine Datenbank.
