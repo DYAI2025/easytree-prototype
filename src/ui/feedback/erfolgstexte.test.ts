@@ -4,6 +4,7 @@ import {
   baustelleAngelegt,
   baustellentagGespeichert,
   einsatzAngelegt,
+  einsatzGespeichert,
   serieUebernommen,
 } from "./erfolgstexte";
 
@@ -50,6 +51,47 @@ describe("einsatzAngelegt", () => {
 
   it("nennt keine technische Id", () => {
     expect(einsatzAngelegt("Baumpflege Herbstschnitt", 4)).not.toMatch(UUID);
+  });
+});
+
+/*
+ * Die Einsatzbearbeitung (Confluence 49119274 D-007) hat zwei Ausgaenge, und
+ * der Satz muss sie unterscheiden: eine reine Metadatenaenderung ergaenzt
+ * KEINEN Tag, eine Verlaengerung schon. Ein Satz, der immer von ergaenzten
+ * Tagen spricht, waere im ersten Fall schlicht falsch.
+ */
+describe("einsatzGespeichert", () => {
+  it("nennt den Einsatz beim fachlichen Namen und sagt, dass gespeichert wurde", () => {
+    const text = einsatzGespeichert("Baumpflege Herbstschnitt", 0);
+
+    expect(text).toContain("Baumpflege Herbstschnitt");
+    expect(text).toContain("gespeichert");
+  });
+
+  it("nennt bei einer Verlaengerung die Zahl der ERGAENZTEN Tage", () => {
+    const text = einsatzGespeichert("Baumpflege Herbstschnitt", 5);
+
+    expect(text).toContain("5 Baustellentage");
+    expect(text).toContain("ergänzt");
+  });
+
+  it("formuliert den einzelnen ergaenzten Tag im Singular", () => {
+    const text = einsatzGespeichert("Sturmschaden Sofortmassnahme", 1);
+
+    expect(text).toContain("1 Baustellentag");
+    expect(text).not.toContain("Baustellentage");
+  });
+
+  it("behauptet ohne Verlaengerung keine ergaenzten Tage", () => {
+    const text = einsatzGespeichert("Baumpflege Herbstschnitt", 0);
+
+    // Weder "0 Baustellentage ergaenzt" noch ueberhaupt eine Tagesaussage:
+    // es wurde keiner ergaenzt, und das ist etwas anderes als null ergaenzte.
+    expect(text).not.toContain("Baustellentag");
+  });
+
+  it("nennt keine technische Id", () => {
+    expect(einsatzGespeichert("Baumpflege Herbstschnitt", 3)).not.toMatch(UUID);
   });
 });
 
@@ -139,6 +181,8 @@ describe("EYT-175: die neuen Erfolgsmeldungen transliterieren keine Umlaute", ()
   const meldungen = (): readonly { name: string; text: string }[] => [
     { name: "einsatzAngelegt", text: einsatzAngelegt("Testeinsatz", 4) },
     { name: "einsatzAngelegt (Singular)", text: einsatzAngelegt("Testeinsatz", 1) },
+    { name: "einsatzGespeichert", text: einsatzGespeichert("Testeinsatz", 3) },
+    { name: "einsatzGespeichert (ohne Tage)", text: einsatzGespeichert("Testeinsatz", 0) },
     { name: "baustellentagGespeichert", text: baustellentagGespeichert("2026-09-10") },
     { name: "serieUebernommen", text: serieUebernommen(2) },
     { name: "serieUebernommen (Singular)", text: serieUebernommen(1) },
@@ -156,5 +200,6 @@ describe("EYT-175: die neuen Erfolgsmeldungen transliterieren keine Umlaute", ()
   it("verwendet im Satz den Gedankenstrich, nicht den Bindestrich", () => {
     expect(serieUebernommen(2)).toContain(" – ");
     expect(einsatzAngelegt("Testeinsatz", 4)).toContain(" – ");
+    expect(einsatzGespeichert("Testeinsatz", 3)).toContain(" – ");
   });
 });

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { WorksiteDayDetailDto } from "../../contracts/worksite-days";
 import { ApiProblemError } from "../../lib/api-client";
-import { DayDrawer } from "./day-drawer";
+import { DayDrawer, type DayDrawerProps } from "./day-drawer";
 
 const { apiGet, apiPost } = vi.hoisted(() => ({ apiGet: vi.fn(), apiPost: vi.fn() }));
 
@@ -116,9 +116,15 @@ function stammdaten(detail: WorksiteDayDetailDto = DETAIL): void {
   });
 }
 
-function zeichnen(heute = "2026-09-01") {
+function zeichnen(heute = "2026-09-01", extra: Partial<DayDrawerProps> = {}) {
   return render(
-    <DayDrawer worksiteDayId={TAG_ID} today={heute} onClose={() => {}} onSaved={() => {}} />,
+    <DayDrawer
+      worksiteDayId={TAG_ID}
+      today={heute}
+      onClose={() => {}}
+      onSaved={() => {}}
+      {...extra}
+    />,
   );
 }
 
@@ -210,6 +216,47 @@ describe("DayDrawer", () => {
     // Der Banner ist nur ehrlich, wenn "Neu laden" tatsaechlich die Servertruth
     // erneut liest - router.refresh() wuerde den Drawer NICHT neu laden.
     await waitFor(() => expect(apiGet.mock.calls.length).toBeGreaterThan(anzahlVorher));
+  });
+
+  /*
+   * Der Baustellentag ist Kind eines Einsatzes (Confluence 49119274,
+   * Invariante 2). Der Weg zum Elternkontext fuehrt deshalb VON HIER - und
+   * zwar als ausdruecklich benannte, eigene Aktion. Ein zweiter paralleler
+   * Editor waere die Alternative gewesen und ist bewusst nicht gebaut.
+   */
+  it("bietet den Weg zur Einsatzbearbeitung an und reicht die Einsatz-Id weiter", async () => {
+    const nutzer = userEvent.setup();
+    const onEditEngagement = vi.fn();
+
+    stammdaten();
+    zeichnen("2026-09-01", { onEditEngagement });
+
+    await screen.findByTestId("tageskopf");
+
+    await nutzer.click(screen.getByRole("button", { name: "Einsatz bearbeiten" }));
+
+    // Die Id kommt aus der Servertruth des Tages, nicht aus einer Annahme.
+    expect(onEditEngagement).toHaveBeenCalledWith(DETAIL.engagementId);
+  });
+
+  it("zeigt den Weg zur Einsatzbearbeitung nicht, wenn ihn niemand entgegennimmt", async () => {
+    stammdaten();
+    zeichnen();
+
+    await screen.findByTestId("tageskopf");
+
+    // Ein Control ohne Wirkung ist schlimmer als keins (Befund B-02).
+    expect(screen.queryByRole("button", { name: "Einsatz bearbeiten" })).not.toBeInTheDocument();
+  });
+
+  it("haelt Tages- und Einsatzbearbeitung sprachlich auseinander", async () => {
+    stammdaten();
+    zeichnen("2026-09-01", { onEditEngagement: () => {} });
+
+    await screen.findByTestId("tageskopf");
+
+    expect(screen.getByRole("dialog", { name: "Baustellentag" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Einsatz bearbeiten" })).toBeInTheDocument();
   });
 
   it("sperrt einen vergangenen Tag und nennt den Grund", async () => {

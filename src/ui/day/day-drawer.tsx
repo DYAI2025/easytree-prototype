@@ -55,6 +55,12 @@ export interface DayDrawerProps {
    */
   /** Zweitrangige Aktion aus 6.5: die Kosten sind nie die Startflaeche. */
   readonly onShowCosts?: (engagementId: string, engagementTitle: string) => void;
+  /**
+   * Weg zum Elternkontext: der Baustellentag ist Kind eines Einsatzes
+   * (Confluence 49119274, Invariante 2). Fehlt der Aufrufer, erscheint die
+   * Aktion GAR NICHT - ein Control ohne Wirkung ist schlimmer als keins (B-02).
+   */
+  readonly onEditEngagement?: (engagementId: string) => void;
   readonly onSeriesPreview?: (
     entwurf: DayChangeEntwurf,
     detail: WorksiteDayDetailDto,
@@ -84,6 +90,7 @@ export function DayDrawer({
   onClose,
   onSaved,
   onShowCosts,
+  onEditEngagement,
   onSeriesPreview,
   restoreFocusFallback,
 }: DayDrawerProps) {
@@ -482,7 +489,18 @@ export function DayDrawer({
             </div>
           </fieldset>
 
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
+            {/*
+              Bewusst AUSSERHALB der gesperrten fieldsets: den Einsatz zu
+              bearbeiten ist keine Mutation an diesem Tag. Ein vergangener Tag
+              sperrt seine eigene Bearbeitung (A-07), nicht den Weg zum
+              Elternkontext.
+            */}
+            {onEditEngagement !== undefined && (
+              <Button variant="secondary" onClick={() => onEditEngagement(detail.engagementId)}>
+                Einsatz bearbeiten
+              </Button>
+            )}
             {onShowCosts !== undefined && (
               <Button
                 variant="secondary"

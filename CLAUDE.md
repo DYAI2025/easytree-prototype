@@ -64,7 +64,7 @@ src/app, src/ui React; client mutates only via /api/* through src/lib/api-client
 
 Guard invariants worth internalizing before touching UI or domain code:
 
-- **No `localStorage`/`sessionStorage` anywhere in `src/ui/**` or `src/app/**`.** View state lives in the URL (`/planung?monat=…&tag=…&drawer=neu|tag|kosten&id=…`); form state lives in the drawer instance's React state. Server is the only truth (REQ-NF-001).
+- **No `localStorage`/`sessionStorage` anywhere in `src/ui/**` or `src/app/**`.** View state lives in the URL (`/planung?monat=…&tag=…&drawer=neu|tag|kosten|einsatz&id=…`); form state lives in the drawer instance's React state. Server is the only truth (REQ-NF-001).
 - **No `fetch` to external hosts outside `src/server/geocoding/**`.** Geocoding is server-side only.
 - The month view is computed server-side (`MonthPlanningView`); the client only lays out spans.
 - Server Components load initial data through the query layer directly — never fetch the app's own API.
@@ -111,7 +111,7 @@ Playwright runs `workers: 1`, `fullyParallel: false` — all specs share one dat
 
 ## Stop and ask
 
-Do not decide these silently; they are `HUMAN_INPUT_REQUIRED` (H-01…H-07 in the plan, §2):
+Do not decide these silently; they are `HUMAN_INPUT_REQUIRED` (H-01…H-07 in the plan, §2 — H-07 has since been resolved, see `docs/decisions/HUMAN_INPUT_REQUIRED.md`):
 
 - a third series scope `gesamter Einsatz` (H-02, deliberately not planned)
 - overwriting individually adjusted following days before OQ-001 is decided (H-01)
@@ -119,7 +119,7 @@ Do not decide these silently; they are `HUMAN_INPUT_REQUIRED` (H-01…H-07 in th
 - wiring a geocoding provider that needs credentials (H-04)
 - resource-type attributes beyond `vehicle|machine|equipment` + name/identifier/active/daily rate (H-05)
 - making past days editable (H-06)
-- extending an existing Einsatz's period (H-07)
+- **shortening** an existing Einsatz, moving its `startDate`, or changing its Baustelle. Forward extension is *no longer* a stop — H-07 was resolved on 13.09.2026 against Confluence `49119274` D-007 / Invariante 12 (`LATER_EXTENSION = SAME_ENGAGEMENT_ADDITIONAL_DAYS_ONLY`) and is implemented in `update-engagement`. Shrinking stays closed (`422 ENGAGEMENT_SHRINK_NOT_ALLOWED`), and `startDate`/`worksiteId` are absent from `UpdateEngagementCommand` by design.
 - a Baustellentag without an Einsatz parent, or making the calendar create-flow mandatory
 - any test turning green by lowering a rule or threshold
 

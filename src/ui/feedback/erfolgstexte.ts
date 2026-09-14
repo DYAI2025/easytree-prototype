@@ -44,6 +44,27 @@ export function einsatzAngelegt(titel: string, anzahlTage: number): string {
 }
 
 /**
+ * Einsatzbearbeitung (Confluence 49119274 D-007).
+ *
+ * Zwei Ausgaenge, zwei Saetze - und das ist keine Kosmetik: eine reine
+ * Metadatenaenderung ergaenzt KEINEN Baustellentag. Ein Satz, der immer von
+ * ergaenzten Tagen spraeche, waere in diesem Fall schlicht falsch, und "0
+ * Baustellentage ergaenzt" waere eine Aussage ueber etwas, das nicht
+ * stattgefunden hat.
+ *
+ * `anzahlNeueTage` ist die Laenge von `addedWorksiteDayIds` aus der
+ * Serverantwort - also die Zahl der wirklich materialisierten Tage, nicht die
+ * im Formular gerechnete Differenz zweier Datumsfelder.
+ */
+export function einsatzGespeichert(titel: string, anzahlNeueTage: number): string {
+  if (anzahlNeueTage === 0) {
+    return `Einsatz „${titel}“ gespeichert.`;
+  }
+
+  return `Einsatz „${titel}“ gespeichert – ${tage(anzahlNeueTage)} ergänzt.`;
+}
+
+/**
  * UX-031. Fachlicher Kontext ist das Datum des Tages; das Datum stammt aus dem
  * Lesemodell, nicht aus der URL.
  *

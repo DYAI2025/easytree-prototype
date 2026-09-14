@@ -1,10 +1,13 @@
 # HUMAN_INPUT_REQUIRED — offene Entscheidungen des Prototypen
 
-Sieben Entscheidungen sind **nicht** getroffen. Der Prototyp verhält sich an
-jeder dieser Stellen bewusst konservativ und sichtbar, statt die Frage still zu
-schließen.
+Ursprünglich waren hier **sieben** Entscheidungen offen. **Sechs davon sind es
+weiterhin**; H-07 (Einsatz-Verlängerung) ist am 13.09.2026 aufgelöst worden —
+nicht durch eine stille Implementierungsentscheidung, sondern weil die
+kanonische Produktentscheidung dazu bereits existierte (siehe dort). Der
+Prototyp verhält sich an jeder noch offenen Stelle bewusst konservativ und
+sichtbar, statt die Frage still zu schließen.
 
-Quelle aller sieben Punkte ist Abschnitt 2 (`HUMAN_INPUT_REQUIRED`) des
+Quelle aller sieben ursprünglichen Punkte ist Abschnitt 2 (`HUMAN_INPUT_REQUIRED`) des
 kanonischen Plans
 [`docs/plans/2026-09-07-easytree-admin-planning-prototype.md`](../plans/2026-09-07-easytree-admin-planning-prototype.md);
 die dort genannten `OQ-*`-Nummern stammen aus dem PRD, die `A-*`-Nummern sind
@@ -124,22 +127,61 @@ werden?
   ist bis dahin ein Stop.
 - **Quelle:** Plan §2 H-06, Annahme A-07; PRD OQ-002; Task TASK-008/018/019.
 
-## H-07 — Verlängerung eines bestehenden Einsatzes
+## H-07 — Verlängerung eines bestehenden Einsatzes — AUFGELÖST (13.09.2026)
+
+**Status: `RESOLVED_BY_EXISTING_CANONICAL_DECISION`**
 
 **Frage (D-007):** Soll der Zeitraum eines bereits angelegten Einsatzes
 nachträglich verlängert werden können?
 
-- **PROTOTYPE DEFAULT:** **Nicht gebaut.** Der Master-Prompt fordert es nicht.
-  `update-engagement-meta` ändert Titel, Beschreibung und Farbe — **keinen**
-  Zeitraum. Das Datenmodell hält die Ausgangskonfiguration in
-  `engagements.initial_configuration` vor, damit die Verlängerung später **ohne
-  Schemaänderung** ergänzt werden kann.
-- **Warum weiter offen:** Verlängerung heißt, Tage nachzumaterialisieren, und
-  wirft sofort die Frage nach Team, Zeiten und bereits angepassten Tagen der
-  neuen Spanne auf — also H-01 gleich mit.
-- **FINAL PRODUCT DECISION:** ausstehend. Eine bestehende Einsatzspanne zu
-  verlängern ist bis dahin ein Stop.
-- **Quelle:** Plan §2 H-07, §5.3, §7 (`engagements.initial_configuration`), §16.
+**Antwort: ja — und zwar schon vor diesem Prototyp.** Der ursprüngliche Eintrag
+hat die Frage falsch eingeordnet. Er begründete den Stop mit *„Der
+Master-Prompt fordert es nicht"* — das ist eine **Scope-Entscheidung dieses
+Prototyp-Plans**, keine offene Produktfrage. Die Produktfrage selbst war zu
+diesem Zeitpunkt bereits beantwortet:
+
+- Confluence `49119274` **D-007** („Einsatz ist verlängerbar und anpassbar"),
+  Status `CANONICAL_PRODUCT_DECISION / HUMAN_PO_CONFIRMED`;
+- dieselbe Seite, **Invariante 12**: „Spätere Verlängerung fügt nur neue Tage
+  demselben Einsatz hinzu und verändert bestehende Tage nicht";
+- dieselbe Seite, **Drift-Gate-Frage 11** und die Gates
+  `LATER_EXTENSION = SAME_ENGAGEMENT_ADDITIONAL_DAYS_ONLY` sowie
+  `PREFILL = MATERIALIZED / NO_LIVE_INHERITANCE`;
+- **EYT-120**, Akzeptanzkriterium „Derselbe Einsatz kann später verlängert
+  werden; nur zusätzliche Tage werden erzeugt" — dort ausdrücklich **im**
+  Scope, während die Tages-/Serienänderung an EYT-121/122 abgegeben ist.
+
+Die Verlängerung ist damit implementiert (`update-engagement`,
+`PATCH /api/einsaetze/[id]`), und zwar genau in der von D-007 vorgeschriebenen
+Form:
+
+- nur **vorwärts**: späteres `endDate` beim Einsatz mit fachlichem Ende,
+  späterer `planningHorizonDate` beim offenen Einsatz;
+- es entstehen **ausschließlich** die bislang nicht materialisierten Tage des
+  Deltas; bestehende `worksite_day`-IDs und deren Revisionen bleiben
+  zeilengleich;
+- neue Tage bekommen Revision 1 / `origin = 'materialized'` und die
+  **persistierte Ausgangskonfiguration** aus
+  `engagements.initial_configuration` — ausdrücklich **nicht** den Zustand des
+  letzten bestehenden Tages, den D-007 wörtlich als Ratequelle ausschließt;
+- keine Live-Vererbung auf bestehende Tage.
+
+**Was hier NICHT entschieden wurde und offen bleibt:**
+
+- **Verkürzen** eines Einsatzes (`ENGAGEMENT_SHRINK_NOT_ALLOWED`, 422) und das
+  **Verschieben des Starts** sind weiterhin nicht freigegeben. Beide stehen
+  nicht im Vertrag `UpdateEngagementCommand` und sind damit nicht nur
+  ungeprüft, sondern strukturell unmöglich.
+- Der **Baustellenwechsel** eines bestehenden Einsatzes ebenso wenig.
+- **H-01 wird dadurch nicht berührt.** Die alte Begründung befürchtete, die
+  Verlängerung werfe „H-01 gleich mit" auf. Das tut sie nicht: neue Tage haben
+  per Konstruktion keine frühere Einzelanpassung, die überschrieben werden
+  könnte. Die Serienregel bleibt unverändert offen.
+- Neue Tage in der **Vergangenheit** entstehen nicht (`DAY_IN_PAST_LOCKED`);
+  H-06 bleibt davon unberührt.
+
+- **Quelle:** Confluence `49119274` D-007, Invariante 12, Drift-Gate 11;
+  Jira EYT-120; Plan §2 H-07, §5.3, §7 (`engagements.initial_configuration`).
 
 ---
 

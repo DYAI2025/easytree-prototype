@@ -10,7 +10,7 @@ import {
   toWire,
 } from "./common";
 import { DayChangeCommand } from "./day-change";
-import { CreateEngagementCommand } from "./engagement";
+import { CreateEngagementCommand, UpdateEngagementCommand } from "./engagement";
 
 describe("LocalDateSchema", () => {
   it("nimmt ein gueltiges Datum an", () => {
@@ -93,6 +93,66 @@ describe("CreateEngagementCommand", () => {
         endDate: "2026-09-18",
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("UpdateEngagementCommand", () => {
+  const basis = {
+    id: "a0000000-0000-4000-8000-000000000001",
+    expectedUpdatedAt: "2026-09-07T08:00:00.123456Z",
+  };
+
+  const beschreibung = (eingabe: Record<string, unknown>) =>
+    UpdateEngagementCommand.safeParse({ ...basis, ...eingabe });
+
+  it("laesst eine weggelassene Beschreibung weggelassen - das heisst unveraendert", () => {
+    const result = beschreibung({});
+
+    expect(result.success).toBe(true);
+    // Der Command unterscheidet an genau dieser Stelle: `undefined` schreibt
+    // nicht. Waere hier `null`, loeschte jedes Speichern die Beschreibung.
+    expect(result.data?.description).toBeUndefined();
+  });
+
+  it("nimmt null als ausdrueckliches Loeschsignal an", () => {
+    const result = beschreibung({ description: null });
+
+    expect(result.success).toBe(true);
+    expect(result.data?.description).toBeNull();
+  });
+
+  it("normalisiert eine geleerte Beschreibung zu null statt zu undefined", () => {
+    // Der eigentliche Befund: als `undefined` waere das Leeren nicht vom
+    // Weglassen zu unterscheiden, und der alte Text ueberlebte das Speichern.
+    expect(beschreibung({ description: "" }).data?.description).toBeNull();
+    expect(beschreibung({ description: "   " }).data?.description).toBeNull();
+  });
+
+  it("trimmt einen nichtleeren Text und laesst ihn Text bleiben", () => {
+    expect(beschreibung({ description: " Baumkontrolle Westseite " }).data?.description).toBe(
+      "Baumkontrolle Westseite",
+    );
+  });
+
+  it("bleibt beim zweiten Parsen stabil - defineRoute UND der Command parsen", () => {
+    // Auf dem HTTP-Pfad laeuft derselbe Body zweimal durch dieses Schema.
+    // Waere die Ausgabe nicht wieder gueltige Eingabe, scheiterte der zweite
+    // Durchlauf mit VALIDATION_FAILED statt zu loeschen.
+    for (const eingabe of [
+      {},
+      { description: null },
+      { description: "" },
+      { description: " T " },
+    ]) {
+      const erste = beschreibung(eingabe);
+
+      expect(erste.success).toBe(true);
+
+      const zweite = UpdateEngagementCommand.safeParse(erste.data);
+
+      expect(zweite.success).toBe(true);
+      expect(zweite.data?.description).toBe(erste.data?.description);
+    }
   });
 });
 

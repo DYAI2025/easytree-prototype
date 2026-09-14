@@ -25,7 +25,7 @@ import type { MonthPlanningViewDto } from "../../contracts/worksite-days";
  *    als der stille Rueckfall, weil sie ein Problem behauptet, das es fachlich
  *    nicht gibt.
  */
-export const PLANUNGS_DRAWER = ["neu", "tag", "kosten"] as const;
+export const PLANUNGS_DRAWER = ["neu", "tag", "kosten", "einsatz"] as const;
 
 export type PlanungsDrawer = (typeof PLANUNGS_DRAWER)[number];
 
@@ -40,6 +40,18 @@ export type PlanungsViewState =
   | { readonly drawer: "tag"; readonly worksiteDayId: string; readonly tag: string }
   | {
       readonly drawer: "kosten";
+      readonly engagementId: string;
+      readonly engagementTitle: string;
+      readonly tag: string | null;
+    }
+  /**
+   * Die Bearbeitung des EINSATZES - nicht die eines Baustellentages. Beide
+   * Flaechen adressieren verschiedene Objekte (Confluence 49119274: der
+   * WorksiteDay ist Kind des Einsatzes) und stehen deshalb als eigene
+   * Zustaende in der URL.
+   */
+  | {
+      readonly drawer: "einsatz";
       readonly engagementId: string;
       readonly engagementTitle: string;
       readonly tag: string | null;
@@ -129,9 +141,16 @@ export function resolvePlanungsViewState(
       : { drawer: "tag", worksiteDayId: id, tag: karte.date };
   }
 
+  // "kosten" und "einsatz" adressieren beide einen Einsatz und werden deshalb
+  // gegen dieselbe Quelle aufgeloest: das Lesemodell muss ihn im sichtbaren
+  // Raster kennen, sonst gilt die id nicht.
   const einsatz = view.cards.find((eintrag) => eintrag.engagementId === id);
 
-  return einsatz === undefined
-    ? { drawer: null, tag }
-    : { drawer: "kosten", engagementId: id, engagementTitle: einsatz.title, tag };
+  if (einsatz === undefined) {
+    return { drawer: null, tag };
+  }
+
+  return drawer === "kosten"
+    ? { drawer: "kosten", engagementId: id, engagementTitle: einsatz.title, tag }
+    : { drawer: "einsatz", engagementId: id, engagementTitle: einsatz.title, tag };
 }
