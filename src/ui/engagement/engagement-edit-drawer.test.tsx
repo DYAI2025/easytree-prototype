@@ -70,6 +70,11 @@ const OFFEN: EngagementDetailDto = {
   planningHorizonDate: "2026-09-18",
 };
 
+const MIT_BESCHREIBUNG: EngagementDetailDto = {
+  ...MIT_ENDE,
+  description: "Baumkontrolle Westseite",
+};
+
 function laden(detail: EngagementDetailDto = MIT_ENDE): void {
   apiGet.mockResolvedValue(detail);
 }
@@ -237,6 +242,98 @@ describe("EngagementEditDrawer", () => {
     await waitFor(() => {
       expect(onSaved).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it("sendet ein ausdrueckliches Loeschsignal, wenn die Beschreibung geleert wird", async () => {
+    laden(MIT_BESCHREIBUNG);
+    apiPatch.mockResolvedValue({
+      engagementId: EINSATZ_ID,
+      updatedAt: "2026-09-07T08:00:01.000000Z",
+      addedWorksiteDayIds: [],
+      addedLocalDates: [],
+    });
+
+    rendere();
+    await geladen();
+
+    const feld = screen.getByLabelText("Beschreibung");
+
+    expect(feld).toHaveValue("Baumkontrolle Westseite");
+
+    const nutzer = userEvent.setup();
+
+    await nutzer.clear(feld);
+    await nutzer.click(screen.getByRole("button", { name: "Speichern" }));
+
+    await waitFor(() => {
+      expect(apiPatch).toHaveBeenCalledTimes(1);
+    });
+
+    const [, koerper] = apiPatch.mock.calls[0] as [string, Record<string, unknown>];
+
+    /*
+     * Der eigentliche Befund: ein weggelassenes Feld heisst serverseitig
+     * "unveraendert". Fehlte der Schluessel hier, meldete das Speichern Erfolg
+     * und der Reload brachte den alten Text zurueck.
+     */
+    expect(koerper).toHaveProperty("description");
+    expect(koerper.description).toBeNull();
+  });
+
+  it("sendet die Beschreibung NICHT mit, wenn sie unveraendert bleibt", async () => {
+    // Die Gegenprobe: ein Titelwechsel ist keine Aussage ueber die
+    // Beschreibung und darf keine fachliche Mutation an ihr ausloesen.
+    laden(MIT_BESCHREIBUNG);
+    apiPatch.mockResolvedValue({
+      engagementId: EINSATZ_ID,
+      updatedAt: "2026-09-07T08:00:01.000000Z",
+      addedWorksiteDayIds: [],
+      addedLocalDates: [],
+    });
+
+    rendere();
+    await geladen();
+
+    const nutzer = userEvent.setup();
+
+    await nutzer.clear(screen.getByLabelText("Titel"));
+    await nutzer.type(screen.getByLabelText("Titel"), "Nur der Titel");
+    await nutzer.click(screen.getByRole("button", { name: "Speichern" }));
+
+    await waitFor(() => {
+      expect(apiPatch).toHaveBeenCalledTimes(1);
+    });
+
+    const [, koerper] = apiPatch.mock.calls[0] as [string, Record<string, unknown>];
+
+    expect(koerper).not.toHaveProperty("description");
+  });
+
+  it("sendet eine geaenderte Beschreibung als Text mit", async () => {
+    laden(MIT_BESCHREIBUNG);
+    apiPatch.mockResolvedValue({
+      engagementId: EINSATZ_ID,
+      updatedAt: "2026-09-07T08:00:01.000000Z",
+      addedWorksiteDayIds: [],
+      addedLocalDates: [],
+    });
+
+    rendere();
+    await geladen();
+
+    const nutzer = userEvent.setup();
+
+    await nutzer.clear(screen.getByLabelText("Beschreibung"));
+    await nutzer.type(screen.getByLabelText("Beschreibung"), "Ostseite statt Westseite");
+    await nutzer.click(screen.getByRole("button", { name: "Speichern" }));
+
+    await waitFor(() => {
+      expect(apiPatch).toHaveBeenCalledTimes(1);
+    });
+
+    const [, koerper] = apiPatch.mock.calls[0] as [string, Record<string, unknown>];
+
+    expect(koerper.description).toBe("Ostseite statt Westseite");
   });
 
   it("erklaert einen Nebenlaeufigkeitskonflikt und bietet Neuladen an", async () => {

@@ -213,6 +213,89 @@ describe("update-engagement: Metadaten", () => {
     expect(nachher.colourKey).toBe("moos");
   });
 
+  it("loescht eine vorhandene Beschreibung auf ausdrueckliches Leeren", async () => {
+    const angelegt = await createEngagement(
+      deps,
+      mitEnde({ description: "Baumkontrolle Westseite" }),
+    );
+    const vorher = await engagementDetail(deps, angelegt.engagementId);
+
+    // Vorbedingung: es gibt ueberhaupt etwas zu loeschen.
+    expect(vorher.description).toBe("Baumkontrolle Westseite");
+
+    await updateEngagement(deps, {
+      id: angelegt.engagementId,
+      expectedUpdatedAt: vorher.updatedAt,
+      description: null,
+    });
+
+    const nachher = await engagementDetail(deps, angelegt.engagementId);
+
+    expect(nachher.description).toBeNull();
+
+    // Und in der Tabelle selbst - eine Rueckgabe kann stimmen, waehrend die
+    // Spalte noch den alten Text traegt.
+    const zeile = await einsatzZeile(angelegt.engagementId);
+
+    expect(zeile.description).toBeNull();
+    // Nur die Beschreibung faellt weg; der Rest des Einsatzes bleibt stehen.
+    expect(zeile.title).toBe("Rueckschnitt");
+    expect(zeile.colour_key).toBe("moos");
+  });
+
+  it("loescht die Beschreibung auch bei einer geleerten Zeichenkette", async () => {
+    // Die Oberflaeche sendet ein geleertes Textfeld; fachlich ist das
+    // dasselbe Loeschsignal wie null und darf nicht zu "unveraendert" werden.
+    const angelegt = await createEngagement(deps, mitEnde({ description: "Zu loeschen" }));
+    const vorher = await engagementDetail(deps, angelegt.engagementId);
+
+    await updateEngagement(deps, {
+      id: angelegt.engagementId,
+      expectedUpdatedAt: vorher.updatedAt,
+      description: "   ",
+    });
+
+    expect((await engagementDetail(deps, angelegt.engagementId)).description).toBeNull();
+    expect((await einsatzZeile(angelegt.engagementId)).description).toBeNull();
+  });
+
+  it("laesst eine WEGGELASSENE Beschreibung exakt erhalten", async () => {
+    // Die Gegenprobe zum Loeschen: Weglassen und Leeren muessen zwei
+    // verschiedene Dinge bleiben, sonst loescht jeder Titelwechsel mit.
+    const angelegt = await createEngagement(deps, mitEnde({ description: "Bleibt stehen" }));
+    const vorher = await engagementDetail(deps, angelegt.engagementId);
+
+    await updateEngagement(deps, {
+      id: angelegt.engagementId,
+      expectedUpdatedAt: vorher.updatedAt,
+      title: "Nur der Titel",
+    });
+
+    const nachher = await engagementDetail(deps, angelegt.engagementId);
+
+    expect(nachher.description).toBe("Bleibt stehen");
+    expect(nachher.title).toBe("Nur der Titel");
+    expect((await einsatzZeile(angelegt.engagementId)).description).toBe("Bleibt stehen");
+  });
+
+  it("fuehrt das Loeschen als geaendertes Feld im Audit-Eintrag", async () => {
+    const angelegt = await createEngagement(deps, mitEnde({ description: "Verschwindet" }));
+    const vorher = await engagementDetail(deps, angelegt.engagementId);
+
+    await updateEngagement(deps, {
+      id: angelegt.engagementId,
+      expectedUpdatedAt: vorher.updatedAt,
+      description: null,
+    });
+
+    const rows = await handle.sql<{ payload: Record<string, unknown> }[]>`
+      select payload from audit_events where operation = 'update_engagement'
+    `;
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.payload.changedFields).toEqual(["description"]);
+  });
+
   it("schreibt einen Audit-Eintrag mit Einsatz-Id und Correlation-Id", async () => {
     const angelegt = await createEngagement(deps, mitEnde());
     const vorher = await engagementDetail(deps, angelegt.engagementId);

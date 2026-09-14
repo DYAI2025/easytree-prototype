@@ -30,7 +30,14 @@ interface Angelegt {
  */
 async function einsatzAnlegen(
   request: APIRequestContext,
-  optionen: { titel: string; baustelle: string; start: string; ende: string; key: string },
+  optionen: {
+    titel: string;
+    baustelle: string;
+    start: string;
+    ende: string;
+    key: string;
+    beschreibung?: string;
+  },
 ): Promise<Angelegt> {
   const baustellen = await request.get("/api/baustellen");
 
@@ -46,6 +53,7 @@ async function einsatzAnlegen(
     data: {
       worksiteId: ziel!.id,
       title: optionen.titel,
+      ...(optionen.beschreibung === undefined ? {} : { description: optionen.beschreibung }),
       startDate: optionen.start,
       endDate: optionen.ende,
       colourKey: "schiefer",
@@ -68,6 +76,7 @@ async function detail(request: APIRequestContext, engagementId: string) {
   return (await antwort.json()) as {
     id: string;
     title: string;
+    description: string | null;
     colourKey: string;
     endDate: string | null;
     updatedAt: string;
@@ -309,6 +318,76 @@ test.describe("einsatz-bearbeiten", () => {
       const nachher = await detail(request, angelegt.engagementId);
 
       expect(nachher.title).toBe("Von A gespeichert");
+    } finally {
+      await kontext.close();
+    }
+  });
+
+  test("Beschreibung: geleerte Beschreibung bleibt nach Reload geleert", async ({
+    page,
+    browser,
+    request,
+  }) => {
+    const titel = "Regression Einsatzbearbeitung E";
+
+    const angelegt = await einsatzAnlegen(request, {
+      titel,
+      baustelle: "Parkanlage Nordring",
+      start: "2027-08-23",
+      ende: "2027-08-27",
+      key: "e2e-bearbeiten-e",
+      beschreibung: "Baumkontrolle Westseite",
+    });
+
+    // Vorbedingung, nicht Behauptung: der Server traegt den Text wirklich.
+    expect((await detail(request, angelegt.engagementId)).description).toBe(
+      "Baumkontrolle Westseite",
+    );
+
+    await page.goto(MONAT);
+
+    const drawer = await einsatzdrawerOeffnen(page, "2027-08-23", titel);
+    const feld = drawer.getByLabel("Beschreibung");
+
+    await expect(feld).toHaveValue("Baumkontrolle Westseite");
+
+    await feld.fill("");
+    await expect(feld).toHaveValue("");
+
+    await drawer.getByRole("button", { name: "Speichern" }).click();
+
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(page.getByTestId("erfolgsmeldung")).toContainText(titel);
+
+    /*
+     * Servertruth, nicht React-State: genau hier log der Befund. Das Speichern
+     * meldete Erfolg, weil der Drawer das geleerte Feld gar nicht erst
+     * mitsendete - und der Reload holte den alten Text zurueck.
+     */
+    const nachher = await detail(request, angelegt.engagementId);
+
+    expect(nachher.description).toBeNull();
+    // Die Verlaengerungsinvariante bleibt unberuehrt: kein Tag kam dazu.
+    expect(nachher.days.map((t) => t.worksiteDayId)).toEqual(angelegt.worksiteDayIds);
+    expect(nachher.title).toBe(titel);
+
+    await page.reload();
+
+    const wieder = await einsatzdrawerOeffnen(page, "2027-08-23", titel);
+
+    await expect(wieder.getByLabel("Beschreibung")).toHaveValue("");
+
+    // Zweiter Browserkontext: die Loeschung ist Servertruth, nicht Tab-Zustand.
+    const kontext = await browser.newContext();
+
+    try {
+      const zweite = await kontext.newPage();
+
+      await zweite.goto(MONAT);
+
+      const dort = await einsatzdrawerOeffnen(zweite, "2027-08-23", titel);
+
+      await expect(dort.getByLabel("Beschreibung")).toHaveValue("");
     } finally {
       await kontext.close();
     }

@@ -133,8 +133,20 @@ export function EngagementEditDrawer({
       colourKey: entwurf.colourKey,
     };
 
-    if (entwurf.description !== "") {
-      koerper.description = entwurf.description;
+    /*
+     * Beschreibung: drei Zustaende, nicht zwei. Ein weggelassenes Feld heisst
+     * serverseitig "unveraendert" - wer den Text loescht, braucht deshalb ein
+     * ausdrueckliches `null`. Vorher fehlte der Schluessel beim Leeren: das
+     * Speichern meldete Erfolg, und der Reload holte den alten Text zurueck.
+     *
+     * Unveraendert bleibt zugleich unveraendert. Ein Titelwechsel ist keine
+     * Aussage ueber die Beschreibung und loest an ihr keine Mutation aus -
+     * verglichen wird deshalb getrimmt gegen die Servertruth, nicht gegen "".
+     */
+    const bisherigeBeschreibung = detail.description ?? "";
+
+    if (entwurf.description.trim() !== bisherigeBeschreibung.trim()) {
+      koerper.description = entwurf.description.trim() === "" ? null : entwurf.description;
     }
 
     // Der Zeitraum reist NUR mit, wenn er sich geaendert hat. Sonst waere jeder

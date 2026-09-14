@@ -287,6 +287,44 @@ describe("api-engagements: PATCH", () => {
     expect(detail.updatedAt).toBe(body.updatedAt);
   });
 
+  it("loescht die Beschreibung, wenn sie als null im Rumpf steht", async () => {
+    const { id, token } = await angelegtMitToken();
+
+    // Erst setzen, damit es ueberhaupt etwas zu loeschen gibt.
+    const gesetzt = await sendePatch(id, {
+      expectedUpdatedAt: token,
+      description: "Baumkontrolle Westseite",
+    });
+
+    expect(gesetzt.status).toBe(200);
+
+    const nachSetzen = await (gesetzt as Response).json();
+    const vorher = await (
+      await engagementDetailRoute(new Request(`http://localhost/api/einsaetze/${id}`), {
+        params: Promise.resolve({ id }),
+      })
+    ).json();
+
+    expect(vorher.description).toBe("Baumkontrolle Westseite");
+
+    const response = await sendePatch(id, {
+      expectedUpdatedAt: nachSetzen.updatedAt,
+      description: null,
+    });
+
+    // Der Vertrag an der HTTP-Grenze muss null durchlassen - sonst endet das
+    // Loeschen hier mit 400 VALIDATION_FAILED statt zu wirken.
+    expect(response.status, await response.clone().text()).toBe(200);
+
+    const detail = await (
+      await engagementDetailRoute(new Request(`http://localhost/api/einsaetze/${id}`), {
+        params: Promise.resolve({ id }),
+      })
+    ).json();
+
+    expect(detail.description).toBeNull();
+  });
+
   it("verlaengert nach vorn und ergaenzt nur die neuen Werktage", async () => {
     const { id, token } = await angelegtMitToken();
 

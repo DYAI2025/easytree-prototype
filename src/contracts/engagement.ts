@@ -47,6 +47,37 @@ export const EngagementCreatedSchema = z.object({
 export type EngagementCreated = z.infer<typeof EngagementCreatedSchema>;
 
 /**
+ * Beschreibung in der BEARBEITUNG - drei unterscheidbare Zustaende.
+ *
+ * `optionalText()` taugt hier NICHT: es bildet den geleerten String auf
+ * `undefined` ab, und `undefined` heisst in diesem Command "unveraendert".
+ * Das Loeschen einer Beschreibung waere damit gar nicht ausdrueckbar - das
+ * Speichern meldete Erfolg, und der Reload brachte den alten Text zurueck.
+ *
+ *   weggelassen -> undefined -> kein Schreibvorgang
+ *   " Text "    -> "Text"    -> auf diesen Wert setzen
+ *   "" / "   "  -> null      -> Beschreibung loeschen (Spalte NULL)
+ *   null        -> null      -> Beschreibung loeschen (Spalte NULL)
+ *
+ * Die Ausgabe ist wieder gueltige Eingabe. Das ist keine Feinheit: auf dem
+ * HTTP-Pfad parsen defineRoute UND der Command denselben Rumpf, und ein
+ * `null` aus dem ersten Durchlauf muss den zweiten ueberstehen.
+ */
+const clearableText = (max = 2000) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .nullish()
+    .transform((value) => {
+      if (value === undefined) {
+        return undefined;
+      }
+
+      return value === null || value === "" ? null : value;
+    });
+
+/**
  * Bearbeitung eines BESTEHENDEN Einsatzes (Confluence 49119274 D-007).
  *
  * Was hier fehlt, ist die eigentliche Aussage des Vertrags: es gibt kein
@@ -65,6 +96,10 @@ export type EngagementCreated = z.infer<typeof EngagementCreatedSchema>;
  *
  * Ein weggelassenes Feld bleibt unveraendert - wie bei `UpdateCustomerCommand`
  * und anders als beim vollstaendig ersetzenden `UpsertEmployeeCommand`.
+ *
+ * Davon zu trennen ist das LEEREN eines Feldes: `description` kennt beides,
+ * weil sonst eine einmal gesetzte Beschreibung nie wieder wegginge (siehe
+ * `clearableText`).
  */
 export const UpdateEngagementCommand = z.object({
   id: z.uuid(),
@@ -75,7 +110,8 @@ export const UpdateEngagementCommand = z.object({
    */
   expectedUpdatedAt: z.string().trim().min(1),
   title: nonBlankText(200).optional(),
-  description: optionalText(),
+  /** Drei Zustaende: weggelassen = unveraendert, Text = setzen, leer/null = loeschen. */
+  description: clearableText(),
   colourKey: z.enum(COLOUR_KEYS).optional(),
   endDate: LocalDateSchema.optional(),
   planningHorizonDate: LocalDateSchema.optional(),
